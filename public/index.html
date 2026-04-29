@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>edu3d — NPC Maker World</title>
+    <title>NervOrg — NPC World</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
     <script type="importmap">
       {
@@ -15,75 +18,241 @@
     </script>
   </head>
   <body>
+
+    <!-- Canvas — fullscreen, untouched by skin -->
     <canvas id="scene"></canvas>
 
-    <div id="hud-top">
-      <div id="mode-indicator">Maker Mode</div>
-      <button id="mode-toggle" type="button" title="Tab to switch">Switch to Play</button>
-    </div>
-
-    <div id="hud-help">
-      <div data-mode="maker">
-        <strong>Maker:</strong> WASD to move · Space/Shift up/down · Click canvas to look · Click NPC to edit
+    <!-- ── Workspace top bar ──────────────────────────────────── -->
+    <header class="workspace-topbar">
+      <div class="brand-row">
+        <div class="brand-mark">N</div>
+        <div class="brand-copy">
+          <div class="brand-title">NervOrg</div>
+          <div class="brand-subtitle">NPC World</div>
+        </div>
       </div>
-      <div data-mode="play" hidden>
-        <strong>Play:</strong> WASD to walk · Click canvas to look · E to talk to nearby NPCs · Esc to release mouse
+      <div class="topbar-actions">
+        <!-- Connection status -->
+        <div id="ws-status" class="chip">
+          <span class="status-dot"></span>
+          <span>Connecting…</span>
+        </div>
+        <div class="topbar-divider"></div>
+        <!-- Current mode — text updated by ui.js -->
+        <span id="mode-indicator" class="chip">Maker Mode</span>
+        <!-- Hidden toggle — click handler attached by main.js -->
+        <button id="mode-toggle" hidden type="button">Switch to Play</button>
       </div>
-    </div>
+    </header>
 
-    <div id="crosshair" hidden></div>
-
-    <div id="interact-hint" hidden></div>
-
-    <!-- Maker: spawn panel -->
+    <!-- ── Left panel: NPC list + prompt ─────────────────────── -->
     <div id="spawn-panel" data-mode-only="maker">
-      <h3>Spawn an NPC</h3>
-      <textarea id="prompt-input" rows="3" maxlength="500" placeholder="e.g. a wise old wizard with a blue robe"></textarea>
-      <div class="row">
-        <button id="spawn-btn" type="button">Spawn at crosshair</button>
-        <span id="spawn-status"></span>
+      <div class="panel-header">
+        <h2 class="panel-title">Components</h2>
+        <div class="panel-header-actions">
+          <button type="button" class="panel-icon-button" id="spawn-collapse-btn" title="Collapse panel">
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <rect x="2" y="2" width="10" height="10" rx="3"/>
+              <rect x="2" y="2" width="4" height="10" rx="2"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <p class="hint">NPC will appear ~5 units in front of the camera. Generation can take 1–10 minutes.</p>
+
+      <div class="panel-body">
+        <!-- NPC roster — populated by npcList.js -->
+        <div id="npc-list">
+          <div class="empty-state">No NPCs yet — spawn one below</div>
+        </div>
+
+        <!-- Active generation cards — populated by npcList.js -->
+        <div id="generation-queue"></div>
+
+        <!-- Prompt composer — matches 3DPS PromptComposer -->
+        <div class="prompt-composer">
+          <label class="prompt-input-shell">
+            <span>Describe your NPC</span>
+            <textarea id="prompt-input" rows="4" maxlength="500"
+              placeholder="e.g. a wise old wizard with a blue robe…"></textarea>
+          </label>
+          <div class="prompt-actions">
+            <span class="prompt-hint">Appears ~5 m ahead · 1–10 min to generate</span>
+            <button id="spawn-btn" type="button" class="prompt-submit">Spawn</button>
+          </div>
+          <span id="spawn-status"></span>
+        </div>
+      </div>
     </div>
 
-    <!-- Maker: edit panel -->
+    <!-- ── Right panel: NPC inspector ────────────────────────── -->
     <div id="edit-panel" data-mode-only="maker" hidden>
       <div class="panel-header">
-        <h3>Edit NPC</h3>
-        <button id="edit-close" type="button" aria-label="Close">×</button>
+        <h2 class="panel-title">Inspector</h2>
+        <div class="panel-header-actions">
+          <button id="edit-close" type="button" class="panel-icon-button" aria-label="Close inspector">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M1 1l10 10M11 1 1 11"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <label>Name <input id="edit-name" type="text" maxlength="80" /></label>
 
-      <label>Dialogue lines</label>
-      <div id="edit-dialogue"></div>
-      <button id="edit-add-line" class="ghost" type="button">+ Add line</button>
-
-      <div class="grid">
-        <label>Pos X <input id="edit-px" type="number" step="0.1" /></label>
-        <label>Pos Y <input id="edit-py" type="number" step="0.1" /></label>
-        <label>Pos Z <input id="edit-pz" type="number" step="0.1" /></label>
+      <!-- Tabs: Configure | Dialogue -->
+      <div class="panel-tabs" role="tablist" aria-label="Inspector tabs">
+        <button class="panel-tab panel-tab-active" role="tab" data-tab="configure" type="button">Configure</button>
+        <button class="panel-tab" role="tab" data-tab="dialogue" type="button">Dialogue</button>
       </div>
-      <label>Rotation Y <input id="edit-ry" type="range" min="-3.14159" max="3.14159" step="0.01" /></label>
-      <label>Scale <input id="edit-scale" type="range" min="0.1" max="5" step="0.05" /></label>
 
-      <div class="row">
-        <button id="edit-move" class="ghost" type="button">Move (drag on ground)</button>
-        <button id="edit-delete" class="danger" type="button">Delete</button>
-      </div>
+      <div class="panel-body">
+
+        <!-- ── Configure tab pane ── -->
+        <div data-tab-pane="configure">
+
+          <!-- Identity -->
+          <div class="inspector-section">
+            <div class="section-heading"><h3>Identity</h3></div>
+            <label>Display name
+              <input id="edit-name" type="text" maxlength="80" />
+            </label>
+          </div>
+
+          <!-- Transform -->
+          <div class="inspector-section">
+            <div class="section-heading"><h3>Transform</h3></div>
+            <div class="grid">
+              <label>X <input id="edit-px" type="number" step="0.1" /></label>
+              <label>Y <input id="edit-py" type="number" step="0.1" /></label>
+              <label>Z <input id="edit-pz" type="number" step="0.1" /></label>
+            </div>
+            <label>Rotation Y
+              <input id="edit-ry" type="range" min="-3.14159" max="3.14159" step="0.01" />
+            </label>
+            <label>Scale
+              <input id="edit-scale" type="range" min="0.1" max="5" step="0.05" />
+            </label>
+            <button id="edit-move" class="quiet-button" type="button">Move — drag on ground</button>
+          </div>
+
+          <!-- Danger zone -->
+          <div class="inspector-section inspector-section-danger">
+            <div class="section-heading"><h3>Danger zone</h3></div>
+            <button id="edit-delete" class="danger-button" type="button">Delete NPC</button>
+          </div>
+
+        </div><!-- /configure -->
+
+        <!-- ── Dialogue tab pane ── -->
+        <div data-tab-pane="dialogue" hidden>
+
+          <div class="inspector-section">
+            <div class="section-heading">
+              <h3>Dialogue lines</h3>
+              <button id="edit-add-line" class="quiet-button" type="button">+ Add line</button>
+            </div>
+            <div id="edit-dialogue"></div>
+          </div>
+
+        </div><!-- /dialogue -->
+
+      </div><!-- .panel-body -->
     </div>
 
-    <!-- Play: dialogue popup -->
+    <!-- ── Play mode: dialogue popup ─────────────────────────── -->
     <div id="dialogue-panel" data-mode-only="play" hidden>
       <div class="dialogue-name" id="dialogue-name"></div>
       <div class="dialogue-line" id="dialogue-line"></div>
       <div class="dialogue-foot">
         <span id="dialogue-progress"></span>
-        <span class="dialogue-hint">Click or press Space to continue · Esc to leave</span>
+        <span class="dialogue-hint">Click or Space to continue · Esc to leave</span>
       </div>
     </div>
 
+    <!-- ── Help pill (above floating toolbar) ────────────────── -->
+    <div id="hud-help">
+      <div data-mode="maker">
+        <strong>Maker:</strong> WASD fly · Space/Shift up/down · Click to look · Click NPC to edit
+      </div>
+      <div data-mode="play" hidden>
+        <strong>Play:</strong> WASD walk · Click to look · <kbd>E</kbd> talk · <kbd>Esc</kbd> release
+      </div>
+    </div>
+
+    <!-- Crosshair + interact hint (play mode) -->
+    <div id="crosshair" hidden></div>
+    <div id="interact-hint" hidden></div>
+
+    <!-- Toasts -->
     <div id="toasts"></div>
 
+    <!-- ── Floating toolbar (3DPS-style, bottom-center) ──────── -->
+    <div class="floating-toolbar" role="toolbar" aria-label="Workspace tools">
+
+      <!-- Maker mode button -->
+      <button type="button" class="tool-button toolbar-maker-btn" title="Maker mode — build &amp; edit NPCs (Tab)">
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </button>
+
+      <!-- Play mode button -->
+      <button type="button" class="tool-button toolbar-play-btn" title="Play mode — walk &amp; talk (Tab)">
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="7" r="3"/>
+          <path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>
+        </svg>
+      </button>
+
+      <span class="toolbar-separator" aria-hidden="true"></span>
+
+      <!-- Fly camera (decorative) -->
+      <button type="button" class="tool-button" title="WASD to fly in Maker mode" disabled>
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 2 4.5 20.3l7.5-3.3 7.5 3.3z"/>
+          <path d="M4.5 20.3 12 13.5l7.5 6.8"/>
+        </svg>
+      </button>
+
+      <!-- Zoom in (decorative) -->
+      <button type="button" class="tool-button" title="Scroll wheel to zoom" disabled>
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6"/>
+          <path d="M15 15 20 20"/>
+          <path d="M10.5 7.5v6"/>
+          <path d="M7.5 10.5h6"/>
+        </svg>
+      </button>
+
+      <!-- Zoom out (decorative) -->
+      <button type="button" class="tool-button" title="Scroll to zoom out" disabled>
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6"/>
+          <path d="M15 15 20 20"/>
+          <path d="M7.5 10.5h6"/>
+        </svg>
+      </button>
+
+      <span class="toolbar-separator" aria-hidden="true"></span>
+
+      <!-- Undo (decorative) -->
+      <button type="button" class="tool-button" title="Undo (not yet wired)" disabled>
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 8H4V3"/>
+          <path d="M4.8 8A8 8 0 1 1 7 17.5"/>
+        </svg>
+      </button>
+
+      <!-- Redo (decorative) -->
+      <button type="button" class="tool-button" title="Redo (not yet wired)" disabled>
+        <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 8h5V3"/>
+          <path d="M19.2 8A8 8 0 1 0 17 17.5"/>
+        </svg>
+      </button>
+
+    </div><!-- /.floating-toolbar -->
+
     <script type="module" src="/js/main.js"></script>
+    <script type="module" src="/js/npcList.js"></script>
   </body>
 </html>
