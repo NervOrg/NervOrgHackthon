@@ -25,7 +25,8 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
 - When the model is ready, export the newly created/positioned object as a GLB file to EXACTLY this absolute path:
     {{glbPath}}
 - Center the exported model at the origin with feet/base at Y=0, facing -Z, and apply all transforms before export.
-- Use Blender's GLTF export with format='GLB' and use_selection=True so only the new object ships out (other objects in the scene may be reused by future requests — DO NOT delete them).
+- If the import creates multiple objects, parent/group the complete imported hierarchy and select every visible mesh/armature/empty that belongs to the requested model before export. Do not export a single child mesh unless it is the entire model.
+- Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out (other objects in the scene may be reused by future requests — DO NOT delete them).
 - When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
 - Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
@@ -84,6 +85,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
   if (mcpTools.length === 0) {
     throw new Error('Blender MCP server reported zero tools — is Blender running with the addon enabled?');
   }
+  await assertBlenderReady();
   onProgress(`MCP ready (${mcpTools.length} tools)`);
 
   const openaiTools = toOpenAITools(mcpTools);
@@ -186,6 +188,22 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     : 'GLB contains no animation clips; browser procedural motion will be used');
 
   return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+}
+
+async function assertBlenderReady() {
+  let result;
+  try {
+    result = await callMcpTool('get_scene_info', {
+      user_prompt: 'edu3d Blender readiness check',
+    });
+  } catch (err) {
+    throw new Error(`Blender MCP is not connected to Blender: ${err.message || String(err)}`);
+  }
+
+  const { text } = formatMcpResult(result);
+  if (result?.isError || /could not connect|connection refused|addon is running/i.test(text)) {
+    throw new Error(`Blender MCP is not connected to Blender: ${text.slice(0, 300)}`);
+  }
 }
 
 function glbExistsAndValid(p) {

@@ -6,9 +6,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:codex": "node -e \"process.env.GENERATOR='codex'; import('./server.js')\"",
-    "dev": "node -e \"process.env.FAKE_GENERATOR='1'; import('./server.js')\"",
-    "check": "node scripts/check-openai.mjs"
+    "start:codex": "node scripts/run-with-env.mjs GENERATOR=codex -- node server.js",
+    "dev": "node scripts/run-with-env.mjs FAKE_GENERATOR=1 -- node server.js",
+    "check": "node scripts/check-openai.mjs",
+    "check:mcp": "node scripts/check-mcp.mjs",
+    "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
