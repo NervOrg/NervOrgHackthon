@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { toast } from './ui.js';
 
 const loader = new GLTFLoader();
 const TARGET_HEIGHT = 1.8; // world units; auto-scaled to this on import
@@ -89,6 +90,11 @@ function autoScaleAndCenter(root) {
   root.position.x -= center2.x;
   root.position.z -= center2.z;
   root.position.y -= box2.min.y;
+}
+
+function cacheBustedUrl(url, key) {
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}v=${encodeURIComponent(key || Date.now())}`;
 }
 
 function makeNameSprite(name) {
@@ -196,8 +202,9 @@ export class Npc {
   }
 
   _loadGlb(url) {
+    const loadUrl = cacheBustedUrl(url, this.data.id);
     loader.load(
-      url,
+      loadUrl,
       (gltf) => {
         const model = gltf.scene;
         model.traverse((o) => {
@@ -216,7 +223,8 @@ export class Npc {
       },
       undefined,
       (err) => {
-        console.error('Failed to load GLB:', url, err);
+        console.error('Failed to load GLB:', loadUrl, err);
+        toast(`Model file loaded in Blender, but the app could not display it. Check DevTools for ${url}.`, 'error', 7000);
       }
     );
   }
@@ -241,8 +249,6 @@ export class Npc {
     if (this.placeholder) {
       // Keep placeholder if no glb_url (fake mode) but make it solid.
       if (data.glb_url) {
-        this.root.remove(this.placeholder);
-        this.placeholder = null;
         this._loadGlb(data.glb_url);
       } else {
         this.root.remove(this.placeholder);

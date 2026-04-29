@@ -1,6 +1,3 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-
 let connectPromise = null;
 let client = null;
 let toolsCache = null;
@@ -13,10 +10,22 @@ let toolsCache = null;
 export async function getMcpClient() {
   if (client) return client;
   if (!connectPromise) connectPromise = connect();
-  return connectPromise;
+  try {
+    return await connectPromise;
+  } catch (err) {
+    connectPromise = null;
+    client = null;
+    toolsCache = null;
+    throw err;
+  }
 }
 
 async function connect() {
+  const [{ Client }, { StdioClientTransport }] = await Promise.all([
+    import('@modelcontextprotocol/sdk/client/index.js'),
+    import('@modelcontextprotocol/sdk/client/stdio.js'),
+  ]);
+
   const command = process.env.MCP_CMD || 'uvx';
   const args = (process.env.MCP_ARGS || 'blender-mcp').split(/\s+/).filter(Boolean);
 

@@ -14,7 +14,12 @@ const PORT = Number(process.env.PORT || 3000);
 
 const app = express();
 app.use(express.json());
-app.use('/assets', express.static(path.join(__dirname, 'assets'), { fallthrough: false }));
+app.use('/assets', express.static(path.join(__dirname, 'assets'), {
+  fallthrough: false,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'no-store');
+  },
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/state', async (_req, res) => {

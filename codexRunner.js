@@ -82,14 +82,15 @@ async function fakeGenerate({ id, prompt, onProgress = () => {} }) {
 
 function buildCodexPrompt({ id, prompt, glbPath, statusPath }) {
   return [
-    `Use the blender-mcp tools to create a 3D NPC character based on this description: "${prompt}".`,
+    `Use the blender-mcp tools to create the requested 3D asset based on this description: "${prompt}".`,
+    'The request may be a character, vehicle, prop, building, creature, group, or abstract object. Build the requested thing directly.',
     '',
     'Hard requirements:',
     `- Export the final result as a single GLB file to: ${glbPath}`,
     '- Center the model at the origin with the FEET at Y=0 and the model facing -Z.',
     '- Keep total polygon count under 50,000.',
     '- Apply all transforms before export and include materials/textures embedded in the GLB.',
-    '- Approximate human/character height should be ~1.8 Blender units unless the prompt clearly implies otherwise.',
+    '- Use a natural real-world scale for the requested asset. Characters are usually ~1.8 Blender units tall; vehicles and props should use appropriate proportions.',
     '',
     'When you are completely done, write a status file to:',
     `  ${statusPath}`,

@@ -5,10 +5,12 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "GENERATOR=openai node server.js",
-    "start:codex": "GENERATOR=codex node server.js",
-    "dev": "FAKE_GENERATOR=1 node server.js",
-    "check": "node scripts/check-openai.mjs"
+    "start": "node server.js",
+    "start:codex": "node scripts/run-with-env.mjs GENERATOR=codex -- node server.js",
+    "dev": "node scripts/run-with-env.mjs FAKE_GENERATOR=1 -- node server.js",
+    "check": "node scripts/check-openai.mjs",
+    "check:mcp": "node scripts/check-mcp.mjs",
+    "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

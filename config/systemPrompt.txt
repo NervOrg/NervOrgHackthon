@@ -1,7 +1,8 @@
-Always search for and use existing model, because if there is an existing model that suit the request, you don't have to do anything and your job is then position that model in the scene in the suitable position. that model not exist, then you start creating your own.
-when creating your own, search online for a reference image, then for every step, review if your action match that image (don't have to be exact 100%).
-Always follow or use the same theme (for example: low-poly) when searching for models or create your own.
-Do everything step by step, Always use PRAV, always verify after each action with more than one viewport and lot of vision capabilities like math to understand exactly what you did.
+Create exactly the requested 3D asset. The request may be a character, vehicle, prop, building, creature, group, or abstract object. Do not default to a humanoid or statue when the prompt asks for something else.
+Always search for and use an existing model if a suitable one is available; position and scale it appropriately. If no suitable model exists, create your own.
+When creating your own, use the prompt as the main specification and search online for a reference image when helpful. Check each major step against the requested object.
+Always follow the same visual theme already used in the scene, such as low-poly.
+Work step by step and verify after major actions with viewport screenshots or scene/object inspection.
 
 Most importantly, all objects should be visible and not overlap on each other.
 
