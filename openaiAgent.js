@@ -26,6 +26,8 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
     {{glbPath}}
 - Center the exported model at the origin with feet/base at Y=0, facing -Z, and apply all transforms before export.
 - Use Blender's GLTF export with format='GLB' and use_selection=True so only the new object ships out (other objects in the scene may be reused by future requests — DO NOT delete them).
+- When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
+- Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
 - After the GLB file exists at the path above, you are done. End your turn with a brief summary message and no further tool calls.
 - If you cannot fulfil the request, end your turn with a short message starting with "ERROR:" describing why — do not silently give up.
@@ -43,10 +45,23 @@ async function loadSystemPromptTemplate() {
 
 function buildSystemPrompt({ template, prompt, jobId, glbPath }) {
   const userPart = template.replaceAll('{{prompt}}', prompt);
+  const animationPart = buildAnimationPrompt(prompt);
   const requirements = SERVER_REQUIREMENTS_TEMPLATE
     .replaceAll('{{glbPath}}', glbPath)
     .replaceAll('{{jobId}}', jobId);
-  return userPart + '\n' + requirements;
+  return userPart + '\n\n' + animationPart + '\n' + requirements;
+}
+
+function buildAnimationPrompt(prompt) {
+  return [
+    'ANIMATION FROM PROMPT:',
+    '- Treat animation words in the user prompt as hard creative requirements, not optional polish.',
+    '- If the user asks for waving, walking, dancing, spinning, breathing, hovering, pulsing, attacking, driving, flying, or any other motion, create that exact motion as a short seamless looping Blender action.',
+    '- Name the primary action clearly, such as Idle, Wave, Walk, Hover, Spin, Dance, Drive, Fly, or Attack.',
+    '- If the prompt does not specify motion but the asset can plausibly move, create a subtle Idle loop.',
+    '- Prefer simple reliable keyframed object, bone, or shape-key animation over complex rigs that may fail to export.',
+    `- User prompt to interpret for animation intent: "${prompt}"`,
+  ].join('\n');
 }
 
 /**
@@ -165,7 +180,12 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
   }
 
-  return { glb_url: `/assets/${id}.glb` };
+  const animationCount = countGlbAnimations(glbPath);
+  onProgress(animationCount > 0
+    ? `GLB contains ${animationCount} animation clip(s)`
+    : 'GLB contains no animation clips; browser procedural motion will be used');
+
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
 }
 
 function glbExistsAndValid(p) {
@@ -174,6 +194,20 @@ function glbExistsAndValid(p) {
     return st.isFile() && st.size >= MIN_GLB_BYTES;
   } catch {
     return false;
+  }
+}
+
+function countGlbAnimations(p) {
+  try {
+    const data = fs.readFileSync(p);
+    if (data.toString('ascii', 0, 4) !== 'glTF') return 0;
+    const jsonLength = data.readUInt32LE(12);
+    const jsonType = data.toString('ascii', 16, 20);
+    if (jsonType !== 'JSON') return 0;
+    const json = JSON.parse(data.subarray(20, 20 + jsonLength).toString('utf8'));
+    return Array.isArray(json.animations) ? json.animations.length : 0;
+  } catch {
+    return 0;
   }
 }
 

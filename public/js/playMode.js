@@ -54,6 +54,7 @@ export class PlayMode {
     document.getElementById('interact-hint').hidden = true;
     document.getElementById('dialogue-panel').hidden = true;
     document.getElementById('crosshair').hidden = false;
+    this.activeNpc?.setEngaged?.(false);
     this.activeNpc = null;
     this.targetNpc = null;
   }
@@ -153,6 +154,7 @@ export class PlayMode {
 
   _startDialogue(npc) {
     this.activeNpc = npc;
+    npc.setEngaged?.(true);
     this.dialogueIndex = 0;
     if (this.controls.isLocked) this.controls.unlock();
 
@@ -187,6 +189,7 @@ export class PlayMode {
   }
 
   _endDialogue() {
+    this.activeNpc?.setEngaged?.(false);
     this.activeNpc = null;
     this.dialogueIndex = 0;
     document.getElementById('dialogue-panel').hidden = true;

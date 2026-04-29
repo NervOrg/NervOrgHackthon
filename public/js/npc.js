@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const loader = new GLTFLoader();
 const TARGET_HEIGHT = 1.8; // world units; auto-scaled to this on import
 const NAME_COLORS = ['#5aa9ff', '#7cd9ff', '#a4f0a0', '#ffc97c', '#ff8fa3', '#c79bff'];
+const WANDER_RADIUS = 1.8;
+const WANDER_SPEED = 0.55;
 
 function colorForId(id) {
   let h = 0;
@@ -124,6 +126,14 @@ function makeNameSprite(name) {
   return sprite;
 }
 
+function classifyNpc(data) {
+  const text = `${data.name || ''} ${data.prompt || ''}`.toLowerCase();
+  if (/(car|vehicle|truck|lamborghini|mclaren|p1|bike|motorcycle)/.test(text)) return 'vehicle';
+  if (/(gem|crystal|stone|orb|artifact|treasure)/.test(text)) return 'object';
+  if (/(soldier|solder|marine|wizard|kid|slayer|dreadnought|person|human|npc)/.test(text)) return 'character';
+  return 'character';
+}
+
 export class Npc {
   constructor(data) {
     this.data = { ...data };
@@ -131,12 +141,25 @@ export class Npc {
     this.root = new THREE.Group();
     this.root.userData.npcId = data.id;
     this.modelRoot = null;
+    this.mixer = null;
+    this.actions = [];
+    this.hasClipAnimation = false;
     this.placeholder = null;
     this.nameSprite = null;
     this.selection = null;
     this._t = Math.random() * Math.PI * 2; // animation phase per NPC
+    this._life = {
+      kind: classifyNpc(this.data),
+      home: new THREE.Vector3(),
+      target: null,
+      nextDecisionAt: 0,
+      engaged: false,
+      visualBase: new THREE.Vector3(),
+      speed: WANDER_SPEED * (0.75 + Math.random() * 0.5),
+    };
 
     this._applyTransform();
+    this._life.home.copy(this.root.position);
     this._buildPlaceholder();
     if (!this.pending && data.glb_url) this._loadGlb(data.glb_url);
     this._buildNameSprite();
@@ -158,6 +181,7 @@ export class Npc {
       blob.material.emissiveIntensity = 0.9 + Math.sin(this._t * 4.0) * 0.4;
       halo.material.opacity = 0.12 + Math.sin(this._t * 3.5) * 0.08;
     }
+    if (!this.pending) this._tickLife(dt);
   }
 
   _applyTransform() {
@@ -167,6 +191,7 @@ export class Npc {
     this.root.position.set(p[0] || 0, p[1] || 0, p[2] || 0);
     this.root.rotation.set(r[0] || 0, r[1] || 0, r[2] || 0);
     this.root.scale.setScalar(s);
+    if (this._life) this._life.home.copy(this.root.position);
   }
 
   _buildPlaceholder() {
@@ -199,6 +224,7 @@ export class Npc {
     loader.load(
       url,
       (gltf) => {
+        this._clearClipAnimation();
         const model = gltf.scene;
         model.traverse((o) => {
           if (o.isMesh) {
@@ -207,7 +233,9 @@ export class Npc {
           }
         });
         autoScaleAndCenter(model);
+        this._life.visualBase.copy(model.position);
         this.modelRoot = model;
+        this._setupClipAnimation(gltf);
         this.root.add(model);
         if (this.placeholder) {
           this.root.remove(this.placeholder);
@@ -221,6 +249,34 @@ export class Npc {
     );
   }
 
+  _setupClipAnimation(gltf) {
+    const clips = gltf.animations || [];
+    this.hasClipAnimation = clips.length > 0;
+    if (!this.hasClipAnimation) return;
+
+    this.mixer = new THREE.AnimationMixer(this.modelRoot);
+    const preferredClip = clips.find((clip) => /idle|loop|walk|hover|spin/i.test(clip.name)) || clips[0];
+    this.actions = clips.map((clip) => {
+      const action = this.mixer.clipAction(clip);
+      action.enabled = true;
+      action.clampWhenFinished = false;
+      action.setLoop(THREE.LoopRepeat);
+      return action;
+    });
+    this.mixer.clipAction(preferredClip).play();
+    console.info(`Playing animation "${preferredClip.name || 'clip'}" for ${this.data.name || this.data.id}`);
+  }
+
+  _clearClipAnimation() {
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      if (this.modelRoot) this.mixer.uncacheRoot(this.modelRoot);
+    }
+    this.mixer = null;
+    this.actions = [];
+    this.hasClipAnimation = false;
+  }
+
   /**
    * Update visuals when the underlying NPC data changes.
    * Pass `pending: false` and a fresh `data` object to "promote" a placeholder
@@ -228,6 +284,7 @@ export class Npc {
    */
   update(patch) {
     Object.assign(this.data, patch);
+    if ('name' in patch || 'prompt' in patch) this._life.kind = classifyNpc(this.data);
     if ('position' in patch || 'rotation' in patch || 'scale' in patch) {
       this._applyTransform();
     }
@@ -253,6 +310,81 @@ export class Npc {
       this._loadGlb(data.glb_url);
     }
     this._refreshNameSprite();
+  }
+
+  setEngaged(engaged) {
+    this._life.engaged = engaged;
+    this._life.target = null;
+  }
+
+  _tickLife(dt) {
+    const body = this.modelRoot || this.placeholder;
+    if (!body) return;
+    if (this.mixer) this.mixer.update(dt);
+
+    if (this.hasClipAnimation) {
+      if (!this._life.engaged) this._tickWander(dt, this._life.kind === 'vehicle' ? 0.9 : 1);
+      return;
+    }
+
+    const bob = Math.sin(this._t * 2.2) * 0.025;
+    const breathe = 1 + Math.sin(this._t * 2.0) * 0.012;
+    const talk = this._life.engaged ? Math.sin(this._t * 10.0) * 0.045 : 0;
+
+    if (this._life.kind === 'object') {
+      body.position.y = this._life.visualBase.y + 0.12 + Math.sin(this._t * 1.8) * 0.08;
+      body.rotation.y += dt * 0.35;
+      body.scale.setScalar(1 + Math.sin(this._t * 2.5) * 0.025);
+      return;
+    }
+
+    if (this._life.kind === 'vehicle') {
+      this._tickWander(dt, 0.9);
+      body.position.y = this._life.visualBase.y + Math.sin(this._t * 8.0) * 0.006;
+      body.rotation.z = Math.sin(this._t * 4.5) * 0.01;
+      return;
+    }
+
+    if (!this._life.engaged) this._tickWander(dt, 1);
+    body.position.y = this._life.visualBase.y + bob + talk;
+    body.rotation.x = Math.sin(this._t * 1.7) * 0.018;
+    body.rotation.z = Math.sin(this._t * 1.3) * 0.012;
+    body.scale.set(1 / breathe, breathe, 1 / breathe);
+  }
+
+  _tickWander(dt, speedMultiplier) {
+    if (this._t < this._life.nextDecisionAt && !this._life.target) return;
+    if (!this._life.target) this._pickWanderTarget();
+
+    const toTarget = new THREE.Vector3().subVectors(this._life.target, this.root.position);
+    toTarget.y = 0;
+    const distance = toTarget.length();
+    if (distance < 0.08) {
+      this._life.target = null;
+      this._life.nextDecisionAt = this._t + 1.5 + Math.random() * 3.5;
+      return;
+    }
+
+    const step = Math.min(distance, this._life.speed * speedMultiplier * dt);
+    const dir = toTarget.multiplyScalar(1 / Math.max(distance, 0.0001));
+    this.root.position.addScaledVector(dir, step);
+
+    const targetYaw = Math.atan2(dir.x, dir.z);
+    const delta = Math.atan2(
+      Math.sin(targetYaw - this.root.rotation.y),
+      Math.cos(targetYaw - this.root.rotation.y)
+    );
+    this.root.rotation.y += delta * Math.min(1, dt * 5);
+  }
+
+  _pickWanderTarget() {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = WANDER_RADIUS * (0.25 + Math.random() * 0.75);
+    this._life.target = this._life.home.clone().add(new THREE.Vector3(
+      Math.sin(angle) * radius,
+      0,
+      Math.cos(angle) * radius
+    ));
   }
 
   setSelected(selected) {
@@ -282,6 +414,7 @@ export class Npc {
   }
 
   dispose() {
+    this._clearClipAnimation();
     this.root.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {

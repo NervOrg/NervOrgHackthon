@@ -29,7 +29,7 @@ const MIN_GLB_BYTES = 1024;
  * @param {string} opts.id
  * @param {string} opts.prompt
  * @param {(msg: string) => void} [opts.onProgress]
- * @returns {Promise<{ glb_url: string | null }>}
+ * @returns {Promise<{ glb_url: string | null, animation_count?: number }>}
  */
 export async function generateNpc(opts) {
   await fsp.mkdir(ASSETS_DIR, { recursive: true });
@@ -73,7 +73,7 @@ async function fakeGenerate({ id, prompt, onProgress = () => {} }) {
   void prompt;
   const glbPath = path.join(ASSETS_DIR, `${id}.glb`);
   if (fs.existsSync(glbPath)) await fsp.rm(glbPath, { force: true });
-  return { glb_url: null };
+  return { glb_url: null, animation_count: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -84,11 +84,19 @@ function buildCodexPrompt({ id, prompt, glbPath, statusPath }) {
   return [
     `Use the blender-mcp tools to create a 3D NPC character based on this description: "${prompt}".`,
     '',
+    'Animation from prompt:',
+    '- Treat animation words in the prompt as hard requirements.',
+    '- If the prompt asks for waving, walking, dancing, spinning, breathing, hovering, pulsing, attacking, driving, flying, or any other motion, create that exact motion as a short seamless looping Blender action.',
+    '- Name the primary action clearly, such as Idle, Wave, Walk, Hover, Spin, Dance, Drive, Fly, or Attack.',
+    '- If the prompt does not specify motion but the asset can plausibly move, create a subtle Idle loop.',
+    '',
     'Hard requirements:',
     `- Export the final result as a single GLB file to: ${glbPath}`,
     '- Center the model at the origin with the FEET at Y=0 and the model facing -Z.',
     '- Keep total polygon count under 50,000.',
     '- Apply all transforms before export and include materials/textures embedded in the GLB.',
+    '- When the asset can plausibly move, create a short looping animation action using Blender keyframes, bones, or object transforms.',
+    '- Export animation data in the GLB with export_animations=True, export_skins=True, and export_bake_animation=True.',
     '- Approximate human/character height should be ~1.8 Blender units unless the prompt clearly implies otherwise.',
     '',
     'When you are completely done, write a status file to:',
@@ -165,5 +173,23 @@ async function generateWithCodex({ id, prompt, onProgress = () => {} }) {
   if (stat.size < MIN_GLB_BYTES) {
     throw new Error(`Generated GLB is too small (${stat.size} bytes)`);
   }
-  return { glb_url: `/assets/${id}.glb` };
+  const animationCount = countGlbAnimations(glbPath);
+  onProgress(animationCount > 0
+    ? `GLB contains ${animationCount} animation clip(s)`
+    : 'GLB contains no animation clips; browser procedural motion will be used');
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+}
+
+function countGlbAnimations(p) {
+  try {
+    const data = fs.readFileSync(p);
+    if (data.toString('ascii', 0, 4) !== 'glTF') return 0;
+    const jsonLength = data.readUInt32LE(12);
+    const jsonType = data.toString('ascii', 16, 20);
+    if (jsonType !== 'JSON') return 0;
+    const json = JSON.parse(data.subarray(20, 20 + jsonLength).toString('utf8'));
+    return Array.isArray(json.animations) ? json.animations.length : 0;
+  } catch {
+    return 0;
+  }
 }

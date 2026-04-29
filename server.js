@@ -97,7 +97,7 @@ async function spawnNpc({ prompt, position, rotation }) {
   broadcast({ type: 'npc_pending', id, prompt: cleanPrompt, position: pos, rotation: rot });
 
   try {
-    const { glb_url } = await generateNpc({
+    const { glb_url, animation_count = 0 } = await generateNpc({
       id,
       prompt: cleanPrompt,
       onProgress: (message) => {
@@ -113,6 +113,7 @@ async function spawnNpc({ prompt, position, rotation }) {
       position: pos,
       rotation: rot,
       scale: 1.0,
+      animation_count,
       name: defaultNameFromPrompt(cleanPrompt),
       dialogue: ['Hello, traveler.'],
       created_at: new Date().toISOString(),

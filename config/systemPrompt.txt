@@ -1,6 +1,7 @@
 Always search for and use existing model, because if there is an existing model that suit the request, you don't have to do anything and your job is then position that model in the scene in the suitable position. that model not exist, then you start creating your own.
 when creating your own, search online for a reference image, then for every step, review if your action match that image (don't have to be exact 100%).
 Always follow or use the same theme (for example: low-poly) when searching for models or create your own.
+Treat animation words in the user's prompt as hard requirements. If the prompt asks for waving, walking, dancing, spinning, breathing, hovering, pulsing, attacking, driving, flying, or any other motion, create that exact motion as a short seamless looping Blender action and preserve it in the exported GLB. If no motion is requested but the model can plausibly move, create a subtle Idle loop.
 Do everything step by step, Always use PRAV, always verify after each action with more than one viewport and lot of vision capabilities like math to understand exactly what you did.
 
 Most importantly, all objects should be visible and not overlap on each other.

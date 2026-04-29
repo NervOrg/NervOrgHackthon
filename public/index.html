@@ -38,11 +38,12 @@
     <!-- Maker: spawn panel -->
     <div id="spawn-panel" data-mode-only="maker">
       <h3>Spawn an NPC</h3>
-      <textarea id="prompt-input" rows="3" maxlength="500" placeholder="e.g. a wise old wizard with a blue robe"></textarea>
+      <textarea id="prompt-input" rows="3" maxlength="500" placeholder="e.g. a wise old wizard waving slowly, or a gemstone spinning and pulsing"></textarea>
       <div class="row">
         <button id="spawn-btn" type="button">Spawn at crosshair</button>
         <span id="spawn-status"></span>
       </div>
+      <div id="generation-status" hidden></div>
       <p class="hint">NPC will appear ~5 units in front of the camera. Generation can take 1–10 minutes.</p>
     </div>
 

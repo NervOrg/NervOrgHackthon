@@ -5,9 +5,9 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "GENERATOR=openai node server.js",
-    "start:codex": "GENERATOR=codex node server.js",
-    "dev": "FAKE_GENERATOR=1 node server.js",
+    "start": "node server.js",
+    "start:codex": "node -e \"process.env.GENERATOR='codex'; import('./server.js')\"",
+    "dev": "node -e \"process.env.FAKE_GENERATOR='1'; import('./server.js')\"",
     "check": "node scripts/check-openai.mjs"
   },
   "dependencies": {
