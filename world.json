@@ -149,6 +149,153 @@
         "i am gemstone"
       ],
       "created_at": "2026-04-29T09:02:59.024Z"
+    },
+    {
+      "id": "npc_c8fe7088",
+      "prompt": "create a car",
+      "glb_url": null,
+      "position": [
+        0.1399413945870271,
+        1.4210854715202004e-14,
+        1.0033992384153088
+      ],
+      "rotation": [
+        0,
+        -0.027999999999986327,
+        0
+      ],
+      "scale": 1,
+      "name": "Create a car",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T13:50:44.758Z"
+    },
+    {
+      "id": "npc_e33de84d",
+      "prompt": "a car",
+      "glb_url": null,
+      "position": [
+        -3.934018874493408,
+        1.4210854715202004e-14,
+        4.134483812123676
+      ],
+      "rotation": [
+        0,
+        1.1280000000000139,
+        0
+      ],
+      "scale": 1,
+      "name": "A car",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T13:51:15.161Z"
+    },
+    {
+      "id": "npc_9a0825c1",
+      "prompt": "a car",
+      "glb_url": null,
+      "position": [
+        0,
+        1.4210854715202004e-14,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": 1,
+      "name": "A car",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T13:57:50.995Z"
+    },
+    {
+      "id": "npc_ea0438db",
+      "prompt": "a witch",
+      "glb_url": null,
+      "position": [
+        -2.9069500284381644,
+        -1.4210854715202004e-14,
+        2.5064187594655816
+      ],
+      "rotation": [
+        0,
+        0.693999999999998,
+        0
+      ],
+      "scale": 1,
+      "name": "A witch",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T13:58:20.796Z"
+    },
+    {
+      "id": "npc_bdaf088f",
+      "prompt": "a car",
+      "glb_url": "/assets/npc_bdaf088f.glb",
+      "position": [
+        -1.4452283665580934,
+        1.4210854715202004e-14,
+        1.6094937379782719
+      ],
+      "rotation": [
+        0,
+        0.3180000000000587,
+        0
+      ],
+      "scale": 1,
+      "name": "A car",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T14:37:59.120Z"
+    },
+    {
+      "id": "npc_e6943562",
+      "prompt": "a wizard wearing a purple hat",
+      "glb_url": "/assets/npc_e6943562.glb",
+      "position": [
+        2.9008770891957827,
+        1.4210854715202004e-14,
+        1.987755604120851
+      ],
+      "rotation": [
+        0,
+        -0.6260000000000006,
+        0
+      ],
+      "scale": 1,
+      "name": "A wizard wearing",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T14:50:10.089Z"
+    },
+    {
+      "id": "npc_082326e8",
+      "prompt": "a wizard holding a staff",
+      "glb_url": "/assets/npc_082326e8.glb",
+      "position": [
+        -2.047448544093609,
+        -1.4210854715202004e-14,
+        1.5591029945299546
+      ],
+      "rotation": [
+        0,
+        0.43199999999999705,
+        0
+      ],
+      "scale": 1,
+      "name": "A wizard holding",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-29T16:03:35.717Z"
     }
   ]
 }
