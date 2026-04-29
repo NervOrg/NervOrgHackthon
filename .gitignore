@@ -216,3 +216,41 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node.js / npm / yarn / pnpm
+node_modules/
+.npm/
+.yarn/
+.yarnrc
+.pnp.*
+
+# Build outputs
+dist/
+build/
+out/
+
+# Next.js
+.next/
+
+# Nuxt.js
+.nuxt/
+
+# Remix
+public/build/
+
+# SvelteKit
+.svelte-kit/
+
+# TypeScript / bundlers
+.tsbuildinfo
+
+# Coverage / logs
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# macOS
+.DS_Store
+Thumbs.db
