@@ -32,6 +32,11 @@ function materialColorHex(material) {
   return mat?.color ? `#${mat.color.getHexString()}` : '#ffffff';
 }
 
+function isEditablePartName(name) {
+  return !/(^|[_\-\s])(detail|decoration|decor|decal|trimline|seam|rivet|button|stitch|whisker|claw|tooth|teeth)([_\-\s]|\d|$)/i
+    .test(String(name || ''));
+}
+
 function dispatchNpcPartsReady(npcId, parts) {
   window.__npcPartsByNpcId ??= new Map();
   window.__npcPartsByNpcId.set(npcId, parts);
@@ -293,6 +298,7 @@ export class Npc {
   _buildPartRegistry(gltfScene) {
     this.clearPartSelection();
     this._parts = new Map();
+    const hasExplicitComponents = this._components.length > 0;
 
     const byMeshIndex = new Map(
       this._components.map((component) => [component.meshIndex, component])
@@ -301,9 +307,19 @@ export class Npc {
     let fallbackIndex = 0;
     gltfScene.traverse((object) => {
       if (!object.isMesh) return;
+      object.userData.npcId = this.id;
 
       const component = byMeshIndex.get(object.userData.meshIndex ?? fallbackIndex)
         ?? this._components.find((entry) => slugifyPartId(entry.name) === slugifyPartId(object.name));
+
+      if (hasExplicitComponents && !component) {
+        fallbackIndex++;
+        return;
+      }
+      if (!component && !isEditablePartName(object.name)) {
+        fallbackIndex++;
+        return;
+      }
 
       const partId = uniquePartId(
         this._parts,
@@ -312,7 +328,6 @@ export class Npc {
       );
 
       object.userData.partId = partId;
-      object.userData.npcId = this.id;
       this._parts.set(partId, object);
       fallbackIndex++;
     });

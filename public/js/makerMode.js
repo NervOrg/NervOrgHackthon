@@ -181,8 +181,13 @@ export class MakerMode {
     }
 
     const pick = this._pickNpcAtPointer(this.controls.isLocked ? new THREE.Vector2(0, 0) : this.pointer);
-    if (pick && !pick.pending) {
-      this._select(pick);
+    if (pick?.npc && !pick.npc.pending) {
+      this._select(pick.npc);
+      if (pick.partId) {
+        document.dispatchEvent(new CustomEvent('select-part', {
+          detail: { npcId: pick.npc.data.id, partId: pick.partId },
+        }));
+      }
       // Releasing the mouse is helpful so the user can edit component settings.
       if (this.controls.isLocked) this.controls.unlock();
       return;
@@ -464,7 +469,7 @@ export class MakerMode {
     const hits = this.raycaster.intersectObject(this.world.group, true);
     for (const hit of hits) {
       const result = this.world.npcFromObject(hit.object);
-      if (result?.npc) return result.npc;
+      if (result?.npc) return result;
     }
     return null;
   }

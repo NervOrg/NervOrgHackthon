@@ -30,12 +30,23 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
     {{glbPath}}
 - Center the exported model at the origin with feet/base at Y=0, facing -Z, and apply all transforms before export.
 - If the import creates multiple objects, parent/group the complete imported hierarchy and select every visible mesh/armature/empty that belongs to the requested model before export. Do not export a single child mesh unless it is the entire model.
+- Before creating Blender geometry, inspect the current scene for reference objects. Objects named Reference_* are explicit references. Imported asset namespaces that match the request category, such as Mustang:* for car/vehicle prompts, may also be used as references. Use references for style, proportions, detail density, semantic editable regions, and material grouping. Do not delete, destructively modify, or export reference objects unless the user explicitly asks to reuse that exact model.
+- At the start of generation, clean up prior app-generated objects so the Blender scene is readable, but preserve all reference objects. Never delete, rename, hide, or modify any object whose name starts with Reference_.
 - Before creating Blender geometry, make an explicit real-world reference plan: describe the requested asset's normal visible components and plausible component colors/materials, then build from that plan.
 - Infer the real-world components of the requested asset before modeling, then create those components as separate named Blender objects/mesh nodes. Keep names user-facing and specific, such as Head, Torso, Left_Arm, Right_Wheel, Hull, Sail, Window, or Door.
 - Assemble components into a recognizable object, not a pile of named primitives. For vehicles, the body/chassis must sit above the wheel centers, wheels must be visibly outside/attached near the lower side edges, windows/cabin must be visible on top of or outside the body shell, and no important component may be buried inside another opaque component.
-- Do not join, merge, or collapse the component meshes into one final mesh. The final GLB must contain multiple named mesh nodes so the browser can raycast-select and edit each part independently.
+- Build a polished game-ready low-poly asset, not a placeholder. Use a strong recognizable silhouette, secondary shapes, and small fitted details that match the prompt. Add details such as paws, claws, ears, muzzle, eyes, whiskers, fur tufts, collars, panels, seams, handles, lights, trim, bevels, or accents when appropriate.
+- Separate model detail from user-editable color regions. Expose only 5-12 meaningful physical/color regions for editing, such as Body, Fur, Head, Eyes, Collar, Wheels, Windows, Trim, Clothing, Metal, Wood, or Accent. Tiny details may be separate meshes for visual richness, but name them with "_Detail_" or "_Decoration_" and give them parent/region materials; they should not become separate UI color controls.
+- Do not remove, crop out, hide, skip, or fail to export visual details just to simplify editing. The GLB must include the full visible generated asset, including detail/decorative meshes. The edit panel is simplified by semantic names and manifest filtering, not by omitting geometry from export.
+- Do not join, merge, or collapse the component meshes into one final mesh. The final GLB must contain multiple named mesh nodes for detailed geometry, but only semantic physical/color regions should be considered user-editable parts.
+- Keep the final export hierarchy flat and browser-safe: parent visible mesh components directly under one root object. Do not export helper empties with mesh children that repeat the same location/rotation as the parent, because Three.js will apply both transforms and parts may separate. Apply object rotations/scales to mesh data before export, while preserving only one intentional transform per component.
 - If an imported/downloaded model arrives as a single mesh, split it into meaningful loose parts when possible or rebuild a simplified multi-part version. Do not export a one-mesh opaque asset.
 - Assign every component mesh at least one named Blender material with a visible base color before export. Use plausible real-world colors/materials for the requested asset; do not leave any mesh with an unassigned/default material slot, and do not use one generic grey/white material for all parts.
+- For every Blender material you create, set BOTH material.diffuse_color and the material node tree's Principled BSDF Base Color. In Python this means:
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = (r, g, b, a)
+  The exported GLB must contain different pbrMetallicRoughness.baseColorFactor values for different component colors; material names alone are not enough.
 - Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out.
 - Export materials in the GLB: set export_materials='EXPORT' when calling bpy.ops.export_scene.gltf.
 - Before export, clear selection and select only the visible meshes/armatures/empties that belong to this job's requested model.
@@ -48,6 +59,8 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
   separate logical parts into one mesh. Each part the user might customise must be
   its own named object.
 - The assembled model GLB is the deliverable. If optional animation, texture, or polish steps fail, skip them and export the assembled model anyway.
+- Use "_Detail_" or "_Decoration_" in mesh names for small visual-only geometry that should not appear as a separate color control, for example Cat_Detail_Whisker_L1, Car_Detail_DoorHandle_L, or Jacket_Decoration_Button_01.
+- When selecting objects for export, select every visible mesh belonging to the generated asset, including ModelType_Detail_* and ModelType_Decoration_* meshes. Do not export only the editable region meshes.
 - After the GLB file exists at the path above, you are done. End your turn with a brief summary message and no further tool calls.
 - If you cannot fulfil the request, end your turn with a short message starting with "ERROR:" describing why — do not silently give up.
 ────────────────────────────────────────────
@@ -67,6 +80,7 @@ PART GENERATION REQUIREMENTS (the system enforces these — do not deviate):
 - Export as GLB to EXACTLY this path:
     {{glbPath}}
 - Use Blender's GLTF export with format='GLB' and use_selection=True.
+- For every Blender material you create, set BOTH material.diffuse_color and the material node tree's Principled BSDF Base Color so GLB export writes the intended pbrMetallicRoughness.baseColorFactor.
 - Name the mesh object using the convention: {{npcType}}_{{partName}} (e.g. Witch_Hat, Car_Wheel_FL).
 - Keep the part under 10,000 polygons.
 - Do NOT create animations for a replacement part unless the prompt specifically requests motion.
@@ -377,6 +391,8 @@ function buildRepairPrompt({ prompt, glbPath, issues, warnings }) {
     '',
     'Repair the existing Blender scene now. Do not start from scratch unless needed.',
     'Fix the component assembly, transforms, scale, root hierarchy, and export selection.',
+    'If the issue mentions distinct material colors, update each Blender material so the exported GLB stores real colors in pbrMetallicRoughness.baseColorFactor. Set material.diffuse_color, set mat.use_nodes = True, find the Principled BSDF node, and set its Base Color input. Do not only rename materials.',
+    'After assigning materials, inspect several material node colors in Blender before export and ensure at least two logical component groups use visibly different non-default colors.',
     `Re-export the repaired model to EXACTLY this path: ${glbPath}`,
     'After the repaired GLB exists at that path, stop making tool calls and briefly summarize the repair.',
   ].join('\n');
@@ -531,7 +547,8 @@ function clampNonNegativeInt(value, fallback) {
 
 export function buildComponentManifest(report) {
   const nodes = report.bounds?.nodes ?? [];
-  const named = nodes.filter((entry) => entry.nodeName && entry.nodeName.trim());
+  const editableNodes = nodes.filter((entry) => isEditableComponentNode(entry.nodeName));
+  const named = editableNodes.filter((entry) => entry.nodeName && entry.nodeName.trim());
   const source = named.length > 0 ? named : nodes;
 
   return source.map((entry) => ({
@@ -540,6 +557,12 @@ export function buildComponentManifest(report) {
     meshIndex: entry.meshIndex ?? null,
     bounds: entry.worldBounds ?? null,
   }));
+}
+
+function isEditableComponentNode(name) {
+  const text = String(name || '');
+  if (!text.trim()) return true;
+  return !/(^|[_\-\s])(detail|decoration|decor|decal|trimline|seam|rivet|button|stitch|whisker|claw|tooth|teeth)([_\-\s]|\d|$)/i.test(text);
 }
 
 export function slugifyPartId(value) {

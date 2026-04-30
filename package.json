@@ -13,6 +13,7 @@
     "check:generation-contract": "node scripts/check-generation-contract.mjs",
     "check:integration-guardrails": "node scripts/check-integration-guardrails.mjs",
     "check:part-manifest": "node scripts/check-part-manifest.mjs",
+    "check:car": "node scripts/check-car-correctness.mjs",
     "test:quality": "node scripts/test-generation-quality.mjs",
     "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"
   },

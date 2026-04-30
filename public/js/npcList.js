@@ -9,6 +9,7 @@ let _activeNpcId = null;
 let _activePartId = null;
 let partColorThrottle = null;
 let pendingPartColor = null;
+const carCheckState = new Map();
 
 on('open', () => setWsStatus('connected', 'Connected'));
 on('close', () => setWsStatus('offline', 'Offline'));
@@ -106,6 +107,7 @@ on('npc_updated', (msg) => {
   if (npc) Object.assign(npc, msg.patch || msg);
   renderList();
   if (msg.id === selectedId) renderPartList(npc);
+  if (msg.id === selectedId) renderCarCheck(npc);
 });
 
 on('npc_deleted', (msg) => {
@@ -155,6 +157,7 @@ export function setSelectedId(id) {
   selectedId = id;
   renderList();
   if (id) renderPartList(npcs.get(id));
+  renderCarCheck(id ? npcs.get(id) : null);
 }
 
 const toggle = () => document.getElementById('mode-toggle')?.click();
@@ -180,6 +183,7 @@ document.getElementById('npc-list')?.addEventListener('click', (e) => {
   selectedId = id;
   renderList();
   renderPartList(npcs.get(id));
+  renderCarCheck(npcs.get(id));
   document.dispatchEvent(new CustomEvent('select-npc', { detail: { id } }));
 });
 
@@ -192,6 +196,7 @@ document.addEventListener('select-npc', (e) => {
   selectedId = id;
   renderList();
   renderPartList(npcs.get(id));
+  renderCarCheck(npcs.get(id));
 });
 
 document.addEventListener('select-part', (e) => {
@@ -275,6 +280,34 @@ document.getElementById('part-generate-btn')?.addEventListener('click', () => {
   if (promptEl) promptEl.value = '';
 });
 
+document.getElementById('car-check-btn')?.addEventListener('click', async () => {
+  if (!selectedId) return;
+  const npc = npcs.get(selectedId);
+  const btn = document.getElementById('car-check-btn');
+  carCheckState.set(selectedId, { kind: 'progress', text: 'Checking car geometry...' });
+  renderCarCheck(npc);
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`/api/npcs/${encodeURIComponent(selectedId)}/car-check`);
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || 'Car check failed');
+    const check = payload.check || {};
+    carCheckState.set(selectedId, {
+      kind: check.ok ? 'ready' : 'failed',
+      text: carCheckSummary(check),
+      check,
+    });
+  } catch (err) {
+    carCheckState.set(selectedId, {
+      kind: 'failed',
+      text: err?.message || 'Car check failed',
+    });
+  } finally {
+    if (btn) btn.disabled = false;
+    renderCarCheck(npc);
+  }
+});
+
 document.querySelectorAll('#edit-panel .panel-tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     switchToTab(btn.dataset.tab);
@@ -314,6 +347,39 @@ function renderList() {
   }).join('');
 
   el.innerHTML = html;
+}
+
+function renderCarCheck(npc) {
+  const result = document.getElementById('car-check-result');
+  const btn = document.getElementById('car-check-btn');
+  if (!result) return;
+
+  if (!npc?.id) {
+    result.className = 'quality-check quality-check-idle';
+    result.textContent = 'Select a generated car, then run the check.';
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  if (btn) btn.disabled = Boolean(npc.pending);
+  const state = carCheckState.get(npc.id);
+  if (!state) {
+    result.className = 'quality-check quality-check-idle';
+    result.textContent = npc.pending
+      ? 'Waiting for generation to finish.'
+      : 'Run this after generating a car.';
+    return;
+  }
+
+  result.className = `quality-check quality-check-${state.kind || 'idle'}`;
+  result.textContent = state.text || 'No result yet.';
+}
+
+function carCheckSummary(check) {
+  const score = Number.isFinite(check.score) ? check.score : 0;
+  if (check.ok) return `Passed - ${score}/100. Body, wheels, windows, lights, and trim found.`;
+  const issues = Array.isArray(check.issues) ? check.issues : [];
+  return `Failed - ${score}/100. ${issues.slice(0, 2).join(' ') || 'Required car features are missing.'}`;
 }
 
 function renderQueue() {

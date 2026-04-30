@@ -882,6 +882,32 @@ input[type='range'] {
   justify-content: center;
 }
 
+.quality-check {
+  min-height: 34px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.quality-check-progress {
+  border-color: color-mix(in srgb, #ff9f0a 34%, var(--line-soft));
+  color: #ffb340;
+}
+
+.quality-check-ready {
+  border-color: color-mix(in srgb, var(--success) 36%, var(--line-soft));
+  color: var(--success);
+}
+
+.quality-check-failed {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--line-soft));
+  color: var(--danger);
+}
+
 .section-heading {
   display: flex;
   align-items: center;

@@ -5,9 +5,23 @@ Always follow the same visual theme already used in the scene, such as low-poly.
 Work step by step and verify after major actions with viewport screenshots or scene/object inspection.
 Treat animation words in the user's prompt as hard requirements. If the prompt asks for waving, walking, dancing, spinning, breathing, hovering, pulsing, attacking, driving, flying, or any other motion, create that exact motion as a short seamless looping Blender action and preserve it in the exported GLB. If no motion is requested but the model can plausibly move, create a subtle Idle loop.
 
+Before generating, inspect the current Blender scene for reference objects. Treat objects named Reference_*, or imported asset namespaces that match the user's requested category such as Mustang:* for car prompts, as visual references for style, proportions, detail density, color-region grouping, and construction logic. Do not delete, modify destructively, or export reference objects unless the user explicitly asks to reuse that exact model. Build a new model that learns from the reference's silhouette, level of detail, material grouping, and physical feature placement.
+
+At the start of each new generation, clean up previous generated objects from this app so the Blender workspace is readable. Delete or hide objects from prior jobs only when they are not reference objects. Never delete, rename, hide, or modify objects whose names start with Reference_.
+
+Do not make overly simple placeholder geometry. Even for short prompts, create a polished game-ready low-poly asset with a recognizable silhouette, secondary shapes, and small details. Add useful details such as paws, claws, ears, muzzle, eyes, whiskers, fur tufts, collars, panels, seams, handles, lights, trim, bevels, or decorative accents when they fit the requested asset. Prefer several clean low-poly components with distinct materials over a few plain spheres/cubes/cylinders. The final model should look intentionally designed from multiple camera angles, not like a minimal prototype.
+
+Keep the color editing UI semantic, not microscopic. Create only 5-12 user-editable physical/color regions that define the object, such as Body, Fur, Head, Eyes, Collar, Wheels, Windows, Trim, Clothing, Metal, Wood, or Accent. You may create many extra detail meshes for visual richness, but name small visual-only meshes with "_Detail_" or "_Decoration_" and let them share the nearest parent/region material. Do not make every whisker, claw, rivet, button, seam, or tiny panel its own color-control part.
+
+Do not remove, crop out, hide, skip, or fail to export visual details just to simplify editing. The exported GLB must contain the full visible model, including small details and decorations. The edit panel is simplified by naming/filtering semantic editable regions, not by deleting or omitting geometry. Export all visible meshes that belong to the generated asset, while only the main physical/color regions should become user-editable controls.
+
 Before touching Blender geometry, first make an explicit reference plan from the user prompt: identify what the requested thing normally looks like in real life, list its visible components, and list plausible colors/materials for each component. Use available model/asset/reference searches when they help. Then construct the Blender model from that plan.
 
 Before modeling, infer the real-life parts of the requested asset and build those parts as separate named Blender objects. Examples: a humanoid should have head, body/torso, left arm, right arm, left leg, right leg; a car should have body, wheels, windows, lights; a boat should have hull, bow, seats, mast/sail or motor when appropriate. Do not join these component meshes into one mesh. Parent them under one root object so the exported GLB is one final model, but keep each part individually raycastable and name each object with a clear component name.
+
+Keep the export hierarchy flat and browser-safe. Parent visible mesh components directly under one root object. Avoid helper empties with mesh children that repeat the same location or rotation, because the browser will apply both transforms and parts can separate. Apply rotations and scales to mesh data before export while keeping one intentional location per component.
+
+When selecting objects for export, select every visible mesh that belongs to the generated asset, including ModelType_Detail_* and ModelType_Decoration_* meshes. Do not select only the editable region objects. Detail meshes should be present in the GLB but filtered out of the edit controls by their names.
 
 Assign a visible material to every component object before export. Use named materials with clear base colors that fit the object, such as skin, cloth, metal, rubber, glass, wood, paint, light, or accent colors. Do not leave any mesh using Blender's default unassigned material. Do not use one generic grey/white material for the whole asset. Components should be visually distinguishable when useful for editing, while still looking like one coherent final asset.
 
@@ -22,6 +36,7 @@ PART NAMING REQUIREMENT:
   Robot_Head, Robot_Arm_Left, Chair_Seat, Chair_Leg_FR.
 - Do not merge separate logical parts into a single mesh.
 - Each part that a user might want to customise independently must be its own object.
+- Name visual-only detail meshes with ModelType_Detail_Name or ModelType_Decoration_Name so they stay visible in the model but do not become separate color controls.
 - Apply all modifiers and set the origin to each part's local centre before export.
 
 Request: {{prompt}}

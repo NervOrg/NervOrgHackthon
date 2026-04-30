@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { v4 as uuid } from 'uuid';
 
+import { checkCarCorrectness } from './carCorrectness.js';
 import * as store from './worldStore.js';
 import { generateNpc, generatePart } from './codexRunner.js';
 import {
@@ -38,6 +39,41 @@ app.get('/health', (_req, res) => {
   const fake = process.env.FAKE_GENERATOR === '1';
   const generator = fake ? 'fake' : (process.env.GENERATOR || 'openai').toLowerCase();
   res.json({ ok: true, generator });
+});
+
+app.get('/api/npcs/:id/car-check', async (req, res) => {
+  const state = await store.getState();
+  const npc = state.npcs.find((entry) => entry.id === req.params.id);
+  if (!npc) {
+    res.status(404).json({ error: `Unknown NPC: ${req.params.id}` });
+    return;
+  }
+  if (!npc.glb_url) {
+    res.status(400).json({ error: 'NPC has no GLB asset' });
+    return;
+  }
+  const glbPath = path.join(__dirname, npc.glb_url.replace(/^\/+/, ''));
+  try {
+    const check = await checkCarCorrectness(glbPath);
+    res.json({ npc: { id: npc.id, name: npc.name, prompt: npc.prompt, glb_url: npc.glb_url }, check });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+app.get('/api/assets/:filename/car-check', async (req, res) => {
+  const filename = path.basename(req.params.filename);
+  if (!filename.endsWith('.glb')) {
+    res.status(400).json({ error: 'filename must be a .glb asset' });
+    return;
+  }
+  const glbPath = path.join(__dirname, 'assets', filename);
+  try {
+    const check = await checkCarCorrectness(glbPath);
+    res.json({ asset: `/assets/${filename}`, check });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
 });
 
 app.post('/api/projects/:projectId/generation/jobs', async (req, res) => {
