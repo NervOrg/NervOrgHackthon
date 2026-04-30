@@ -119,13 +119,14 @@ async function readStatusFile(statusPath) {
 
 async function generateWithCodex({ id, prompt, onProgress = () => {} }) {
   const glbPath = path.join(ASSETS_DIR, `${id}.glb`);
+  const blenderGlbPath = toBlenderPath(glbPath);
   const statusPath = path.join(JOBS_DIR, `${id}.json`);
 
   await fsp.rm(glbPath, { force: true });
   await fsp.rm(statusPath, { force: true });
 
   const codexCmd = process.env.CODEX_CMD || 'codex';
-  const codexArgs = ['exec', '--skip-git-repo-check', buildCodexPrompt({ id, prompt, glbPath, statusPath })];
+  const codexArgs = ['exec', '--skip-git-repo-check', buildCodexPrompt({ id, prompt, glbPath: blenderGlbPath, statusPath })];
 
   onProgress(`Spawning ${codexCmd}...`);
   const child = spawn(codexCmd, codexArgs, { cwd: process.cwd(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -193,4 +194,11 @@ function countGlbAnimations(p) {
   } catch {
     return 0;
   }
+}
+
+function toBlenderPath(p) {
+  const normalized = path.resolve(p).replaceAll('\\', '/');
+  const match = normalized.match(/^\/mnt\/([a-zA-Z])\/(.+)$/);
+  if (!match) return normalized;
+  return `${match[1].toUpperCase()}:/${match[2]}`;
 }
