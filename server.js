@@ -329,4 +329,17 @@ server.listen(PORT, () => {
     }
   }
   console.log('────────────────────────────────────────────────────────────');
+
+  if (!fake) {
+    import('./mcpClient.js').then(({ getMcpClient, listMcpTools }) =>
+      getMcpClient()
+        .then(() => listMcpTools())
+        .then((tools) => console.log(`  Blender MCP: connected ✓  (${tools.length} tools)`))
+        .catch((err) => {
+          console.log('  Blender MCP: not connected ✗');
+          console.log('    → Open Blender and enable the blender-mcp addon, then spawns will work.');
+          console.log(`    → (${err.message || err})`);
+        })
+    );
+  }
 });
