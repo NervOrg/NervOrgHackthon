@@ -21,10 +21,11 @@ export function setModeUI(mode) {
   document.getElementById('mode-toggle').textContent =
     mode === 'maker' ? 'Switch to Play' : 'Switch to Maker';
 
-  document.querySelectorAll('[data-mode-only]').forEach((el) => {
-    const allow = el.getAttribute('data-mode-only') === mode;
-    if (!allow) el.setAttribute('hidden', '');
-  });
+  // Visibility for [data-mode-only] elements is driven entirely by CSS via
+  // body[data-mode]. We avoid touching `hidden` here so per-element state
+  // (e.g. the inspector being closed until an NPC is selected) is preserved
+  // when switching modes back and forth.
+
   document.querySelectorAll('#hud-help [data-mode]').forEach((el) => {
     el.toggleAttribute('hidden', el.getAttribute('data-mode') !== mode);
   });

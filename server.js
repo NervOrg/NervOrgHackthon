@@ -8,6 +8,16 @@ import { v4 as uuid } from 'uuid';
 
 import * as store from './worldStore.js';
 import { generateNpc, generatePart } from './codexRunner.js';
+import {
+  createQueuedGenerationJob,
+  getGenerationJob,
+  listGenerationEvents,
+  listGenerationJobs,
+  markGenerationCanceled,
+  markGenerationFailed,
+  markGenerationProgress,
+  markGenerationSucceeded,
+} from './generationContract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -31,6 +41,47 @@ app.get('/health', (_req, res) => {
   const fake = process.env.FAKE_GENERATOR === '1';
   const generator = fake ? 'fake' : (process.env.GENERATOR || 'openai').toLowerCase();
   res.json({ ok: true, generator });
+});
+
+app.post('/api/projects/:projectId/generation/jobs', async (req, res) => {
+  const job = startNpcGeneration({
+    projectId: req.params.projectId,
+    prompt: req.body?.prompt,
+    position: req.body?.placement?.position ?? req.body?.position,
+    rotation: req.body?.placement?.rotation ?? req.body?.rotation,
+    scale: req.body?.placement?.scale ?? req.body?.scale,
+    source: 'api',
+  });
+  if (!job) {
+    res.status(400).json({ error: 'prompt is required' });
+    return;
+  }
+  res.status(202).json({ job });
+});
+
+app.get('/api/projects/:projectId/generation/jobs', async (req, res) => {
+  const state = await store.getState();
+  res.json({ jobs: listGenerationJobs(req.params.projectId, state.npcs) });
+});
+
+app.get('/api/projects/:projectId/generation/jobs/:jobId', async (req, res) => {
+  const state = await store.getState();
+  const job = getGenerationJob(req.params.projectId, req.params.jobId, state.npcs);
+  if (!job) {
+    res.status(404).json({ error: `Unknown generation job: ${req.params.jobId}` });
+    return;
+  }
+  res.json({ job });
+});
+
+app.get('/api/projects/:projectId/generation/jobs/:jobId/events', async (req, res) => {
+  const state = await store.getState();
+  const job = getGenerationJob(req.params.projectId, req.params.jobId, state.npcs);
+  if (!job) {
+    res.status(404).json({ error: `Unknown generation job: ${req.params.jobId}` });
+    return;
+  }
+  res.json({ events: listGenerationEvents(req.params.projectId, req.params.jobId, state.npcs) });
 });
 
 const server = http.createServer(app);
@@ -81,6 +132,8 @@ async function handleClientMessage(msg) {
       return spawnPart(msg);
     case 'update_npc':
       return updateExistingNpc(msg);
+    case 'update_npc_part':
+      return updateExistingNpcPart(msg);
     case 'delete_npc':
       return removeNpc(msg);
     default:
@@ -90,6 +143,10 @@ async function handleClientMessage(msg) {
 }
 
 async function spawnNpc({ prompt, position, rotation }) {
+  startNpcGeneration({ prompt, position, rotation, source: 'ws' });
+}
+
+function startNpcGeneration({ prompt, position, rotation, scale = 1, projectId = 'default-project', source = 'ws' }) {
   if (!prompt || typeof prompt !== 'string') return;
   const cleanPrompt = prompt.trim().slice(0, 500);
   if (!cleanPrompt) return;
@@ -97,18 +154,33 @@ async function spawnNpc({ prompt, position, rotation }) {
   const id = `npc_${uuid().slice(0, 8)}`;
   const pos = sanitizeVec3(position, [0, 0, 0]);
   const rot = sanitizeVec3(rotation, [0, 0, 0]);
+  const job = createQueuedGenerationJob({
+    id,
+    projectId,
+    prompt: cleanPrompt,
+    position: pos,
+    rotation: rot,
+    scale,
+    source,
+  });
   const startedAt = Date.now();
 
   log(id, `▶ spawn "${cleanPrompt}"  pos=[${pos.map((n) => n.toFixed(1)).join(', ')}]`);
 
   broadcast({ type: 'npc_pending', id, prompt: cleanPrompt, position: pos, rotation: rot });
 
+  void runNpcGeneration({ id, projectId, cleanPrompt, pos, rot, startedAt });
+  return job;
+}
+
+async function runNpcGeneration({ id, projectId, cleanPrompt, pos, rot, startedAt }) {
   try {
     const { glb_url, animation_count = 0, components = [] } = await generateNpc({
       id,
       prompt: cleanPrompt,
       onProgress: (message) => {
         log(id, message);
+        markGenerationProgress(id, message);
         broadcast({ type: 'npc_progress', id, message });
       },
     });
@@ -130,13 +202,16 @@ async function spawnNpc({ prompt, position, rotation }) {
     await store.addNpc(npc);
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
     log(id, `✓ ready in ${elapsed}s  glb_url=${glb_url ?? '(none — fake mode)'}`);
+    markGenerationSucceeded(id, npc);
     broadcast({ type: 'npc_ready', npc });
   } catch (err) {
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
     log(id, `✗ FAILED after ${elapsed}s: ${err.message || err}`);
     if (err && err.stack) console.error(err.stack);
+    markGenerationFailed(id, err);
     broadcast({ type: 'npc_failed', id, error: err.message || String(err) });
   }
+  void projectId;
 }
 
 async function spawnPart({ npcId, partId, prompt }) {
@@ -208,10 +283,21 @@ async function updateExistingNpc({ id, patch }) {
   }
 }
 
+async function updateExistingNpcPart({ id, partId, patch }) {
+  if (!id || !partId || !patch || typeof patch !== 'object') return;
+  const result = await store.updateNpcPart(id, partId, patch);
+  if (result) {
+    broadcast({ type: 'npc_part_updated', id: result.id, partId: result.partId, patch: result.patch });
+  }
+}
+
 async function removeNpc({ id }) {
   if (!id) return;
   const ok = await store.deleteNpc(id);
-  if (ok) broadcast({ type: 'npc_deleted', id });
+  if (ok) {
+    markGenerationCanceled(id);
+    broadcast({ type: 'npc_deleted', id });
+  }
 }
 
 function sanitizeVec3(v, fallback) {

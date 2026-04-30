@@ -10,6 +10,8 @@
     "dev": "node scripts/run-with-env.mjs FAKE_GENERATOR=1 -- node server.js",
     "check": "node scripts/check-openai.mjs",
     "check:mcp": "node scripts/check-mcp.mjs",
+    "check:generation-contract": "node scripts/check-generation-contract.mjs",
+    "check:integration-guardrails": "node scripts/check-integration-guardrails.mjs",
     "check:part-manifest": "node scripts/check-part-manifest.mjs",
     "test:quality": "node scripts/test-generation-quality.mjs",
     "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"

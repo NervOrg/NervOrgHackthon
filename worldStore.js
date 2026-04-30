@@ -77,6 +77,31 @@ export async function updateNpcPartGlb(npcId, partId, glbUrl) {
   });
 }
 
+export async function updateNpcPart(id, partId, patch) {
+  return mutex.runExclusive(async () => {
+    const w = await load();
+    const npc = w.npcs.find((n) => n.id === id);
+    if (!npc) return null;
+
+    const accepted = {};
+    if (typeof patch.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(patch.color)) {
+      accepted.color = patch.color;
+    }
+    if (typeof patch.visible === 'boolean') {
+      accepted.visible = patch.visible;
+    }
+
+    if (Object.keys(accepted).length === 0) return null;
+
+    if (!npc.partOverrides) npc.partOverrides = {};
+    if (!npc.partOverrides[partId]) npc.partOverrides[partId] = {};
+    Object.assign(npc.partOverrides[partId], accepted);
+
+    await flush();
+    return { id, partId, patch: accepted };
+  });
+}
+
 export async function deleteNpc(id) {
   return mutex.runExclusive(async () => {
     const w = await load();
