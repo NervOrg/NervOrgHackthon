@@ -289,6 +289,36 @@ function clampNonNegativeInt(value, fallback) {
   return Math.max(0, Math.floor(parsed));
 }
 
+export function buildComponentManifest(report) {
+  const nodes = report.bounds?.nodes ?? [];
+  const named = nodes.filter((entry) => entry.nodeName && entry.nodeName.trim());
+  const source = named.length > 0 ? named : nodes;
+
+  return source.map((entry) => ({
+    partId: slugifyPartId(entry.nodeName || `part_${entry.meshIndex ?? 0}`),
+    name: humanizePartName(entry.nodeName || `Part ${entry.meshIndex ?? 0}`),
+    meshIndex: entry.meshIndex ?? null,
+    bounds: entry.worldBounds ?? null,
+  }));
+}
+
+export function slugifyPartId(value) {
+  return String(value)
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'part';
+}
+
+export function humanizePartName(value) {
+  return String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
 function countGlbAnimations(p) {
   try {
     const data = fs.readFileSync(p);
