@@ -10,6 +10,7 @@
     "dev": "node scripts/run-with-env.mjs FAKE_GENERATOR=1 -- node server.js",
     "check": "node scripts/check-openai.mjs",
     "check:mcp": "node scripts/check-mcp.mjs",
+    "check:generation-contract": "node scripts/check-generation-contract.mjs",
     "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"
   },
   "dependencies": {
