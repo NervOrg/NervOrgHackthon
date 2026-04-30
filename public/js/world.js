@@ -31,6 +31,7 @@ export class World {
         position: msg.position,
         rotation: msg.rotation || [0, 0, 0],
         scale: 1,
+        movement_paused: false,
         name: 'generating...',
         dialogue: [],
         glb_url: null,

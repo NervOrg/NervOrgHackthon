@@ -114,6 +114,16 @@ document.getElementById('spawn-collapse-btn')?.addEventListener('click', () => {
   document.getElementById('spawn-panel')?.classList.toggle('panel-collapsed');
 });
 
+document.getElementById('npc-list')?.addEventListener('click', (e) => {
+  const item = e.target.closest('.npc-list-item');
+  if (!item) return;
+  const id = item.dataset.npcId;
+  if (!id) return;
+  selectedId = id;
+  renderList();
+  document.dispatchEvent(new CustomEvent('select-npc', { detail: { id } }));
+});
+
 document.querySelectorAll('#edit-panel .panel-tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     const target = btn.dataset.tab;

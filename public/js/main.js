@@ -89,6 +89,27 @@ document.getElementById('mode-toggle').addEventListener('click', () => {
   setMode(currentModeName === 'maker' ? 'play' : 'maker');
 });
 
+document.querySelector('.toolbar-fly-btn')?.addEventListener('click', () => {
+  setMode('maker');
+  toast('Maker fly controls active.', 'info', 1400);
+});
+
+document.querySelector('.toolbar-zoom-in-btn')?.addEventListener('click', () => {
+  zoomCamera(-6);
+});
+
+document.querySelector('.toolbar-zoom-out-btn')?.addEventListener('click', () => {
+  zoomCamera(6);
+});
+
+document.querySelector('.toolbar-undo-btn')?.addEventListener('click', () => {
+  document.dispatchEvent(new CustomEvent('toolbar-undo'));
+});
+
+document.querySelector('.toolbar-redo-btn')?.addEventListener('click', () => {
+  document.dispatchEvent(new CustomEvent('toolbar-redo'));
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Tab' && !isTypingInForm(e.target)) {
     e.preventDefault();
@@ -100,6 +121,11 @@ function isTypingInForm(el) {
   if (!el) return false;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+}
+
+function zoomCamera(delta) {
+  camera.fov = THREE.MathUtils.clamp(camera.fov + delta, 35, 90);
+  camera.updateProjectionMatrix();
 }
 
 // Default mode: Maker (so an empty world isn't boring).

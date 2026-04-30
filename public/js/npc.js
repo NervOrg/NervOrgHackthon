@@ -326,6 +326,7 @@ export class Npc {
   _tickLife(dt) {
     const body = this.modelRoot || this.placeholder;
     if (!body) return;
+    if (this.data.movement_paused) return;
     if (this.mixer) this.mixer.update(dt);
 
     if (this.hasClipAnimation) {

@@ -118,6 +118,7 @@ async function spawnNpc({ prompt, position, rotation }) {
       position: pos,
       rotation: rot,
       scale: 1.0,
+      movement_paused: false,
       animation_count,
       name: defaultNameFromPrompt(cleanPrompt),
       dialogue: ['Hello, traveler.'],
@@ -154,6 +155,9 @@ async function updateExistingNpc({ id, patch }) {
   if (Array.isArray(patch.rotation)) safePatch.rotation = sanitizeVec3(patch.rotation, null);
   if (typeof patch.scale === 'number' && Number.isFinite(patch.scale)) {
     safePatch.scale = clamp(patch.scale, 0.05, 50);
+  }
+  if (typeof patch.movement_paused === 'boolean') {
+    safePatch.movement_paused = patch.movement_paused;
   }
   if (Object.keys(safePatch).length === 0) return;
 

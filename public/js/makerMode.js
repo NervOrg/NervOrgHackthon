@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import * as ws from './ws.js';
 import { toast } from './ui.js';
+import { setSelectedId } from './npcList.js';
 
 const FLY_SPEED = 10; // units / sec
 const FAST_MULT = 2.5;
@@ -37,10 +38,16 @@ export class MakerMode {
       addLine: this._onAddLine.bind(this),
       delete: this._onDelete.bind(this),
       moveToggle: this._onMoveToggle.bind(this),
+      motionToggle: this._onMotionToggle.bind(this),
+      listSelect: this._onListSelect.bind(this),
+      undo: this._onUndo.bind(this),
+      redo: this._onRedo.bind(this),
       promptKey: this._onPromptKeyDown.bind(this),
     };
 
     this._panelInputs = null;
+    this._history = [];
+    this._redo = [];
   }
 
   attach() {
@@ -58,6 +65,10 @@ export class MakerMode {
     document.getElementById('edit-add-line').addEventListener('click', this._bind.addLine);
     document.getElementById('edit-delete').addEventListener('click', this._bind.delete);
     document.getElementById('edit-move').addEventListener('click', this._bind.moveToggle);
+    document.getElementById('edit-motion')?.addEventListener('click', this._bind.motionToggle);
+    document.addEventListener('select-npc', this._bind.listSelect);
+    document.addEventListener('toolbar-undo', this._bind.undo);
+    document.addEventListener('toolbar-redo', this._bind.redo);
 
     document.getElementById('spawn-panel').hidden = false;
   }
@@ -75,6 +86,10 @@ export class MakerMode {
     document.getElementById('edit-add-line').removeEventListener('click', this._bind.addLine);
     document.getElementById('edit-delete').removeEventListener('click', this._bind.delete);
     document.getElementById('edit-move').removeEventListener('click', this._bind.moveToggle);
+    document.getElementById('edit-motion')?.removeEventListener('click', this._bind.motionToggle);
+    document.removeEventListener('select-npc', this._bind.listSelect);
+    document.removeEventListener('toolbar-undo', this._bind.undo);
+    document.removeEventListener('toolbar-redo', this._bind.redo);
 
     if (this.controls.isLocked) this.controls.unlock();
     this.scene.remove(this.controls.getObject());
@@ -241,8 +256,10 @@ export class MakerMode {
     this.selected = npc;
     if (npc) {
       npc.setSelected(true);
+      setSelectedId(npc.data.id);
       this._openEditPanel(npc);
     } else {
+      setSelectedId(null);
       document.getElementById('edit-panel').hidden = true;
       this.dragMode = false;
       this._reflectMoveButton();
@@ -255,7 +272,11 @@ export class MakerMode {
 
     const name = document.getElementById('edit-name');
     name.value = npc.data.name || '';
-    name.oninput = () => this._sendPatch({ name: name.value });
+    name.oninput = () => {
+      const prev = { name: npc.data.name || '' };
+      npc.update({ name: name.value });
+      this._sendPatch({ name: name.value }, prev);
+    };
 
     this._renderDialogueRows(npc);
 
@@ -264,6 +285,7 @@ export class MakerMode {
     const pz = document.getElementById('edit-pz');
     const ry = document.getElementById('edit-ry');
     const sc = document.getElementById('edit-scale');
+    const motion = document.getElementById('edit-motion');
 
     const sync = () => {
       px.value = npc.data.position[0].toFixed(2);
@@ -271,27 +293,34 @@ export class MakerMode {
       pz.value = npc.data.position[2].toFixed(2);
       ry.value = String(npc.data.rotation[1]);
       sc.value = String(npc.data.scale ?? 1);
+      if (motion) {
+        motion.textContent = npc.data.movement_paused ? 'Start moving' : 'Stop moving';
+        motion.classList.toggle('quiet-button-primary', !!npc.data.movement_paused);
+      }
     };
     sync();
-    this._panelInputs = { px, py, pz, ry, sc, sync };
+    this._panelInputs = { px, py, pz, ry, sc, motion, sync };
 
     const updatePos = () => {
+      const prev = { position: [...npc.data.position] };
       const pos = [Number(px.value) || 0, Number(py.value) || 0, Number(pz.value) || 0];
       npc.update({ position: pos });
-      this._sendPatch({ position: pos });
+      this._sendPatch({ position: pos }, prev);
     };
     px.oninput = updatePos;
     py.oninput = updatePos;
     pz.oninput = updatePos;
     ry.oninput = () => {
+      const prev = { rotation: [...npc.data.rotation] };
       const rot = [npc.data.rotation[0], Number(ry.value) || 0, npc.data.rotation[2]];
       npc.update({ rotation: rot });
-      this._sendPatch({ rotation: rot });
+      this._sendPatch({ rotation: rot }, prev);
     };
     sc.oninput = () => {
+      const prev = { scale: npc.data.scale ?? 1 };
       const s = Number(sc.value) || 1;
       npc.update({ scale: s });
-      this._sendPatch({ scale: s });
+      this._sendPatch({ scale: s }, prev);
     };
   }
 
@@ -356,6 +385,54 @@ export class MakerMode {
     if (this.dragMode) toast('Click & drag on the ground to move the NPC.', 'info', 2500);
   }
 
+  _onMotionToggle() {
+    if (!this.selected) return;
+    const prev = { movement_paused: !!this.selected.data.movement_paused };
+    const movementPaused = !this.selected.data.movement_paused;
+    this.selected.update({ movement_paused: movementPaused });
+    this._syncPanelFromSelected();
+    this._sendPatch({ movement_paused: movementPaused }, prev);
+    toast(movementPaused ? 'NPC movement stopped.' : 'NPC movement started.', 'info', 1800);
+  }
+
+  _onListSelect(e) {
+    const id = e.detail?.id;
+    if (!id) return;
+    const npc = this.world.get(id);
+    if (npc && !npc.pending) {
+      this._select(npc);
+      if (this.controls.isLocked) this.controls.unlock();
+    }
+  }
+
+  _onUndo() {
+    const entry = this._history.pop();
+    if (!entry) {
+      toast('Nothing to undo.', 'info', 1200);
+      return;
+    }
+    this._applyHistoryEntry(entry.id, entry.prev);
+    this._redo.push(entry);
+  }
+
+  _onRedo() {
+    const entry = this._redo.pop();
+    if (!entry) {
+      toast('Nothing to redo.', 'info', 1200);
+      return;
+    }
+    this._applyHistoryEntry(entry.id, entry.patch);
+    this._history.push(entry);
+  }
+
+  _applyHistoryEntry(id, patch) {
+    const npc = this.world.get(id);
+    if (!npc) return;
+    npc.update(patch);
+    if (this.selected === npc) this._syncPanelFromSelected();
+    ws.send({ type: 'update_npc', id, patch });
+  }
+
   _reflectMoveButton() {
     const btn = document.getElementById('edit-move');
     btn.textContent = this.dragMode ? 'Cancel move' : 'Move (drag on ground)';
@@ -366,8 +443,13 @@ export class MakerMode {
     if (this._panelInputs) this._panelInputs.sync();
   }
 
-  _sendPatch(patch) {
+  _sendPatch(patch, previousPatch = null) {
     if (!this.selected) return;
+    if (previousPatch) {
+      this._history.push({ id: this.selected.data.id, patch, prev: previousPatch });
+      this._redo.length = 0;
+      if (this._history.length > 50) this._history.shift();
+    }
     ws.send({ type: 'update_npc', id: this.selected.data.id, patch });
   }
 

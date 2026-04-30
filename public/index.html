@@ -130,6 +130,7 @@
             <label>Scale
               <input id="edit-scale" type="range" min="0.1" max="5" step="0.05" />
             </label>
+            <button id="edit-motion" class="quiet-button" type="button">Stop moving</button>
             <button id="edit-move" class="quiet-button" type="button">Move — drag on ground</button>
           </div>
 
@@ -205,16 +206,16 @@
 
       <span class="toolbar-separator" aria-hidden="true"></span>
 
-      <!-- Fly camera (decorative) -->
-      <button type="button" class="tool-button" title="WASD to fly in Maker mode" disabled>
+      <!-- Fly camera -->
+      <button type="button" class="tool-button toolbar-fly-btn" title="WASD to fly in Maker mode">
         <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 2 4.5 20.3l7.5-3.3 7.5 3.3z"/>
           <path d="M4.5 20.3 12 13.5l7.5 6.8"/>
         </svg>
       </button>
 
-      <!-- Zoom in (decorative) -->
-      <button type="button" class="tool-button" title="Scroll wheel to zoom" disabled>
+      <!-- Zoom in -->
+      <button type="button" class="tool-button toolbar-zoom-in-btn" title="Zoom in">
         <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6"/>
           <path d="M15 15 20 20"/>
@@ -223,8 +224,8 @@
         </svg>
       </button>
 
-      <!-- Zoom out (decorative) -->
-      <button type="button" class="tool-button" title="Scroll to zoom out" disabled>
+      <!-- Zoom out -->
+      <button type="button" class="tool-button toolbar-zoom-out-btn" title="Zoom out">
         <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6"/>
           <path d="M15 15 20 20"/>
@@ -234,16 +235,16 @@
 
       <span class="toolbar-separator" aria-hidden="true"></span>
 
-      <!-- Undo (decorative) -->
-      <button type="button" class="tool-button" title="Undo (not yet wired)" disabled>
+      <!-- Undo -->
+      <button type="button" class="tool-button toolbar-undo-btn" title="Undo last inspector edit">
         <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M9 8H4V3"/>
           <path d="M4.8 8A8 8 0 1 1 7 17.5"/>
         </svg>
       </button>
 
-      <!-- Redo (decorative) -->
-      <button type="button" class="tool-button" title="Redo (not yet wired)" disabled>
+      <!-- Redo -->
+      <button type="button" class="tool-button toolbar-redo-btn" title="Redo last inspector edit">
         <svg class="tool-svg" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M15 8h5V3"/>
           <path d="M19.2 8A8 8 0 1 0 17 17.5"/>
