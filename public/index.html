@@ -111,7 +111,7 @@
           <!-- Identity -->
           <div class="inspector-section">
             <div class="section-heading"><h3>Identity</h3></div>
-            <label>Display name
+            <label class="property-field">Display name
               <input id="edit-name" type="text" maxlength="80" />
             </label>
           </div>
@@ -120,18 +120,20 @@
           <div class="inspector-section">
             <div class="section-heading"><h3>Transform</h3></div>
             <div class="grid">
-              <label>X <input id="edit-px" type="number" step="0.1" /></label>
-              <label>Y <input id="edit-py" type="number" step="0.1" /></label>
-              <label>Z <input id="edit-pz" type="number" step="0.1" /></label>
+              <label class="property-field">X <input id="edit-px" type="number" step="0.1" /></label>
+              <label class="property-field">Y <input id="edit-py" type="number" step="0.1" /></label>
+              <label class="property-field">Z <input id="edit-pz" type="number" step="0.1" /></label>
             </div>
-            <label>Rotation Y
+            <label class="property-field">Rotation Y
               <input id="edit-ry" type="range" min="-3.14159" max="3.14159" step="0.01" />
             </label>
-            <label>Scale
+            <label class="property-field">Scale
               <input id="edit-scale" type="range" min="0.1" max="5" step="0.05" />
             </label>
-            <button id="edit-motion" class="quiet-button" type="button">Stop moving</button>
-            <button id="edit-move" class="quiet-button" type="button">Move — drag on ground</button>
+            <div class="inspector-actions">
+              <button id="edit-motion" class="quiet-button" type="button">Stop moving</button>
+              <button id="edit-move" class="quiet-button" type="button">Move — drag on ground</button>
+            </div>
           </div>
 
           <!-- Danger zone -->

@@ -29,6 +29,8 @@ on('npc_pending', (msg) => {
   gens.set(msg.id, {
     name: msg.name || msg.prompt || msg.id,
     msgs: [],
+    status: 'Generating',
+    statusKind: 'progress',
     animationText: 'Animation: checking...',
     animationKind: '',
     done: false,
@@ -59,6 +61,8 @@ on('npc_ready', (msg) => {
   Object.assign(gen, {
     name: npc.name || npc.prompt || npc.id,
     msgs: [...(gen.msgs || []), 'Ready'],
+    status: 'Ready',
+    statusKind: 'ready',
     done: true,
     ...animationStatusFromCount(npc.animation_count || 0),
   });
@@ -72,6 +76,8 @@ on('npc_failed', (msg) => {
   const gen = gens.get(msg.id) || { name: msg.id, msgs: [] };
   Object.assign(gen, {
     msgs: [...(gen.msgs || []), msg.error || 'Generation failed'],
+    status: 'Failed',
+    statusKind: 'failed',
     animationText: 'Animation: failed',
     animationKind: 'error',
     done: true,
@@ -174,8 +180,13 @@ function renderQueue() {
     const lastMsg = gen.msgs[gen.msgs.length - 1] || 'Generating...';
     const animationText = gen.animationText || 'Animation: checking...';
     const animationKind = gen.animationKind || '';
-    return `<div class="gen-item">
-        <div class="gen-item-name">${esc(gen.name)}</div>
+    const status = gen.status || (gen.done ? 'Ready' : 'Generating');
+    const statusKind = gen.statusKind || (gen.done ? 'ready' : 'progress');
+    return `<div class="gen-item gen-item-${esc(statusKind)}">
+        <div class="gen-item-head">
+          <div class="gen-item-name">${esc(gen.name)}</div>
+          <span class="gen-status gen-status-${esc(statusKind)}">${esc(status)}</span>
+        </div>
         <div class="gen-item-msg">${esc(lastMsg)}</div>
         <div class="gen-item-meta">
           <span class="animation-badge ${esc(animationKind)}">${esc(animationText)}</span>

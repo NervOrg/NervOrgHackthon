@@ -2,12 +2,13 @@
 
 :root {
   color-scheme: dark;
-  --app-bg: #111214;
-  --surface: rgba(31, 31, 34, 0.82);
-  --surface-strong: rgba(43, 43, 46, 0.96);
-  --surface-muted: rgba(44, 44, 46, 0.74);
-  --line: #34363b;
-  --line-soft: #27292e;
+  --app-bg: #101113;
+  --surface: rgba(28, 29, 32, 0.68);
+  --surface-strong: rgba(34, 35, 38, 0.88);
+  --surface-muted: rgba(46, 47, 51, 0.52);
+  --surface-field: rgba(13, 14, 17, 0.58);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-soft: rgba(255, 255, 255, 0.08);
   --text: #f5f5f7;
   --muted: #a1a1a6;
   --faint: #6e6e73;
@@ -15,11 +16,13 @@
   --accent-soft: rgba(10, 132, 255, 0.16);
   --success: #30d158;
   --danger: #ff453a;
-  --shadow-soft: 0 18px 55px rgba(0, 0, 0, 0.38);
-  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-  --radius-lg: 16px;
-  --radius-md: 12px;
-  --radius-sm: 9px;
+  --shadow-soft: 0 22px 60px rgba(0, 0, 0, 0.34);
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+  --topbar-height: 44px;
+  --panel-width: clamp(268px, 23vw, 318px);
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* Legacy aliases for existing JS */
   --bg: #111214;
@@ -49,6 +52,7 @@ canvas#scene {
   height: 100vh;
   display: block;
   cursor: grab;
+  z-index: 0;
 }
 canvas#scene:active { cursor: grabbing; }
 
@@ -57,19 +61,19 @@ canvas#scene:active { cursor: grabbing; }
    ======================================================== */
 .workspace-topbar {
   position: fixed;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  height: 48px;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
   box-shadow: var(--shadow-panel), var(--shadow-soft);
   z-index: 30;
 }
@@ -89,7 +93,7 @@ canvas#scene:active { cursor: grabbing; }
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-muted);
   color: var(--accent);
   font-size: 11px;
@@ -389,23 +393,23 @@ body[data-mode='play']  .toolbar-play-btn {
 #spawn-panel,
 #edit-panel {
   position: fixed;
-  top: 72px;
-  width: 288px;
+  top: calc(var(--topbar-height) + 26px);
+  width: var(--panel-width);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel), var(--shadow-soft);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.18);
+  -webkit-backdrop-filter: blur(24px) saturate(1.18);
   z-index: 25;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 160px);
+  max-height: calc(100vh - 154px);
 }
 
-#spawn-panel { left: 10px; }
-#edit-panel  { right: 10px; }
+#spawn-panel { left: 12px; }
+#edit-panel  { right: 12px; }
 
 /* Collapsed state */
 #spawn-panel.panel-collapsed .panel-body { display: none; }
@@ -420,7 +424,7 @@ body[data-mode='play']  .toolbar-play-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px 0 14px;
+  padding: 0 11px 0 13px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -497,7 +501,7 @@ body[data-mode='play']  .toolbar-play-btn {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px;
+  padding: 9px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -582,11 +586,56 @@ body[data-mode='play']  .toolbar-play-btn {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface-muted));
 }
 
+.gen-item-ready {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--line));
+  background: color-mix(in srgb, var(--success) 7%, var(--surface-muted));
+}
+
+.gen-item-failed {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-muted));
+}
+
+.gen-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 3px;
+}
+
 .gen-item-name {
+  flex: 1;
+  min-width: 0;
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
-  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gen-status {
+  flex: 0 0 auto;
+  min-height: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gen-status-ready {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+
+.gen-status-failed {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
 }
 
 .gen-item-msg {
@@ -597,6 +646,7 @@ body[data-mode='play']  .toolbar-play-btn {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .gen-item-meta {
@@ -639,7 +689,7 @@ body[data-mode='play']  .toolbar-play-btn {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
@@ -664,7 +714,7 @@ body[data-mode='play']  .toolbar-play-btn {
   border-radius: var(--radius-sm);
   outline: 0;
   padding: 9px 10px;
-  background: var(--surface);
+  background: var(--surface-field);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 12px;
@@ -683,6 +733,7 @@ body[data-mode='play']  .toolbar-play-btn {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
 }
 
 .prompt-hint {
@@ -690,6 +741,8 @@ body[data-mode='play']  .toolbar-play-btn {
   font-size: 11px;
   line-height: 1.4;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .prompt-submit {
@@ -727,7 +780,7 @@ label {
 input[type='text'],
 input[type='number'] {
   width: 100%;
-  background: var(--surface);
+  background: var(--surface-field);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -801,14 +854,35 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 9px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-muted) 76%, transparent);
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
 }
 
 .inspector-section-danger {
   border-color: color-mix(in srgb, var(--danger) 30%, var(--line-soft));
+}
+
+.property-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.property-field input {
+  min-width: 0;
+}
+
+.inspector-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.inspector-actions .quiet-button {
+  width: 100%;
+  justify-content: center;
 }
 
 .section-heading {
@@ -884,7 +958,7 @@ input[type='range'] {
 .dialogue-row textarea {
   flex: 1;
   min-height: 36px;
-  background: var(--surface);
+  background: var(--surface-field);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -937,12 +1011,20 @@ input[type='range'] {
   color: var(--muted);
   z-index: 20;
   white-space: nowrap;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  max-width: min(680px, calc(100vw - 708px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(22px) saturate(1.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.18);
   box-shadow: var(--shadow-panel);
 }
 
 #hud-help strong { color: var(--text); margin-right: 4px; }
+
+#hud-help > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Crosshair */
 #crosshair {
@@ -975,8 +1057,11 @@ input[type='range'] {
   pointer-events: none;
   z-index: 16;
   white-space: nowrap;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  max-width: min(520px, calc(100vw - 40px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(16px) saturate(1.18);
+  -webkit-backdrop-filter: blur(16px) saturate(1.18);
   box-shadow: var(--shadow-panel);
 }
 
@@ -998,14 +1083,14 @@ input[type='range'] {
   left: 50%;
   bottom: 152px;
   transform: translateX(-50%);
-  width: min(680px, 90vw);
+  width: min(680px, calc(100vw - 40px));
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
   box-shadow: var(--shadow-panel), var(--shadow-soft);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px) saturate(1.18);
+  -webkit-backdrop-filter: blur(24px) saturate(1.18);
   z-index: 30;
 }
 
@@ -1023,11 +1108,13 @@ input[type='range'] {
   line-height: 1.55;
   margin-bottom: 14px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .dialogue-foot {
   display: flex;
   justify-content: space-between;
+  gap: 14px;
   font-size: 11px;
   color: var(--muted);
 }
@@ -1080,3 +1167,51 @@ input[type='range'] {
 }
 
 [hidden] { display: none !important; }
+
+@media (max-width: 1180px) {
+  :root {
+    --panel-width: 260px;
+  }
+
+  .workspace-topbar {
+    left: 10px;
+    right: 10px;
+  }
+
+  #spawn-panel { left: 10px; }
+  #edit-panel { right: 10px; }
+
+  #hud-help {
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 920px) {
+  :root {
+    --panel-width: min(300px, calc(100vw - 20px));
+  }
+
+  .brand-subtitle,
+  .topbar-divider {
+    display: none;
+  }
+
+  #spawn-panel,
+  #edit-panel {
+    top: calc(var(--topbar-height) + 22px);
+    max-height: calc(50vh - 54px);
+  }
+
+  #edit-panel {
+    top: calc(50vh + 8px);
+  }
+
+  #hud-help {
+    display: none;
+  }
+
+  .floating-toolbar {
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+  }
+}
