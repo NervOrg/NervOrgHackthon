@@ -221,16 +221,33 @@ document.getElementById('part-color')?.addEventListener('input', (e) => {
     color: e.target.value,
   };
   updatePartState(_activeNpcId, _activePartId, { color: pendingPartColor.color });
+  document.dispatchEvent(new CustomEvent('part-override', {
+    detail: {
+      npcId: _activeNpcId,
+      partId: _activePartId,
+      patch: { color: pendingPartColor.color },
+    },
+  }));
   schedulePartColorSend();
 });
 
 document.getElementById('part-visible')?.addEventListener('change', (e) => {
   if (!_activeNpcId || !_activePartId) return;
+  const visible = e.target.checked;
+  updatePartState(_activeNpcId, _activePartId, { visible });
+  applyPartStateToRow(_activeNpcId, _activePartId);
+  document.dispatchEvent(new CustomEvent('part-override', {
+    detail: {
+      npcId: _activeNpcId,
+      partId: _activePartId,
+      patch: { visible },
+    },
+  }));
   send({
     type: 'update_npc_part',
     id: _activeNpcId,
     partId: _activePartId,
-    patch: { visible: e.target.checked },
+    patch: { visible },
   });
 });
 
@@ -387,6 +404,8 @@ function normalizeParts(parts) {
     .map((part) => ({
       partId: part.partId,
       name: part.name || humanizePartId(part.partId),
+      color: part.color,
+      visible: part.visible,
     }));
 }
 
@@ -469,7 +488,13 @@ function updatePartState(npcId, partId, patch) {
 function getPartState(npcId, partId) {
   const key = `${npcId || 'unknown'}:${partId}`;
   if (!partState.has(key)) {
-    partState.set(key, { color: '#ffffff', visible: true, statusText: '', statusKind: '' });
+    const part = getPartsForNpc(npcs.get(npcId)).find((entry) => entry.partId === partId);
+    partState.set(key, {
+      color: part?.color || '#ffffff',
+      visible: part?.visible !== false,
+      statusText: '',
+      statusKind: '',
+    });
   }
   return partState.get(key);
 }

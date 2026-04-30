@@ -27,6 +27,11 @@ function uniquePartId(parts, partId, index) {
   return `${partId}_${index + 1}`;
 }
 
+function materialColorHex(material) {
+  const mat = Array.isArray(material) ? material.find((entry) => entry?.color) : material;
+  return mat?.color ? `#${mat.color.getHexString()}` : '#ffffff';
+}
+
 function dispatchNpcPartsReady(npcId, parts) {
   window.__npcPartsByNpcId ??= new Map();
   window.__npcPartsByNpcId.set(npcId, parts);
@@ -513,12 +518,54 @@ export class Npc {
     return this.getPartIds().map((partId) => ({
       partId,
       name: this.getPartName(partId),
+      color: this.getPartColor(partId),
+      visible: this.isPartVisible(partId),
     }));
   }
 
   getPartName(partId) {
     const component = this._components.find((entry) => entry.partId === partId);
     return component?.name ?? partId;
+  }
+
+  getPartColor(partId) {
+    const mesh = this._parts.get(partId);
+    return mesh ? materialColorHex(mesh.material) : '#ffffff';
+  }
+
+  isPartVisible(partId) {
+    const mesh = this._parts.get(partId);
+    return mesh ? mesh.visible !== false : true;
+  }
+
+  setPartColor(partId, color) {
+    const mesh = this._parts.get(partId);
+    if (!mesh || !color) return;
+
+    const applyColor = (material) => {
+      if (!material?.color) return material;
+      const next = material.userData?.partRegistryClone ? material : material.clone();
+      next.userData.partRegistryClone = true;
+      next.color.set(color);
+      if (next.emissive) next.emissive.set(0x000000);
+      next.needsUpdate = true;
+      return next;
+    };
+
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map((material) => applyColor(material))
+      : applyColor(mesh.material);
+    dispatchNpcPartsReady(this.id, this.getParts());
+  }
+
+  setPartVisible(partId, visible) {
+    const mesh = this._parts.get(partId);
+    if (!mesh) return;
+    mesh.visible = visible !== false;
+    if (this._selectedPartId === partId) {
+      this._partHelper?.update?.();
+    }
+    dispatchNpcPartsReady(this.id, this.getParts());
   }
 
   dispose() {

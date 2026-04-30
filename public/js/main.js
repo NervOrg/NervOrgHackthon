@@ -136,6 +136,15 @@ document.addEventListener('select-part', (e) => {
   world.get(npcId)?.setSelectedPart(partId);
 });
 
+document.addEventListener('part-override', (e) => {
+  const { npcId, partId, patch } = e.detail || {};
+  if (!npcId || !partId || !patch) return;
+  const npc = world.get(npcId);
+  if (!npc) return;
+  if (typeof patch.color === 'string') npc.setPartColor(partId, patch.color);
+  if (typeof patch.visible === 'boolean') npc.setPartVisible(partId, patch.visible);
+});
+
 function isTypingInForm(el) {
   if (!el) return false;
   const tag = el.tagName;
