@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 
 import { getMcpClient, listMcpTools, callMcpTool, toOpenAITools } from './mcpClient.js';
 import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
+import { inspectGlb } from './glbInspector.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const SYSTEM_PROMPT_FILE = path.resolve('config/systemPrompt.txt');
@@ -133,7 +134,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
       client,
       model,
       messages,
-      openaiTools,
+      openAITools,
       glbPath,
       maxSteps: repairMaxSteps,
       onProgress,
@@ -154,7 +155,20 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     ? `GLB contains ${animationCount} animation clip(s)`
     : 'GLB contains no animation clips; browser procedural motion will be used');
 
-  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+  let components = [];
+  try {
+    const inspection = await inspectGlb(glbPath);
+    components = buildComponentManifest(inspection);
+    onProgress(
+      components.length > 0
+        ? `Found ${components.length} named part(s): ${components.map((component) => component.name).join(', ')}`
+        : 'No named parts found in GLB; components list will be empty'
+    );
+  } catch (inspectErr) {
+    onProgress(`Part manifest extraction failed: ${inspectErr.message}`);
+  }
+
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount, components };
 }
 
 async function runAgentLoop({ client, model, messages, openaiTools, glbPath, maxSteps, onProgress, phase }) {
