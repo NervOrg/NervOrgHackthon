@@ -11,6 +11,7 @@
     "check": "node scripts/check-openai.mjs",
     "check:mcp": "node scripts/check-mcp.mjs",
     "check:generation-contract": "node scripts/check-generation-contract.mjs",
+    "check:integration-guardrails": "node scripts/check-integration-guardrails.mjs",
     "apply:sketchfab": "node scripts/apply-sketchfab-key.mjs"
   },
   "dependencies": {
