@@ -31,6 +31,10 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
 - When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
 - Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
+- Name every distinct part of the model as a separate mesh object using the pattern
+  ModelType_PartName (e.g. Witch_Hat, Witch_Robe, Car_Wheel_FL). Do not merge
+  separate logical parts into one mesh. Each part the user might customise must be
+  its own named object.
 - After the GLB file exists at the path above, you are done. End your turn with a brief summary message and no further tool calls.
 - If you cannot fulfil the request, end your turn with a short message starting with "ERROR:" describing why — do not silently give up.
 ────────────────────────────────────────────
