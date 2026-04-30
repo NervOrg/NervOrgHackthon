@@ -254,3 +254,7 @@ yarn-error.log*
 # macOS
 .DS_Store
 Thumbs.db
+
+# NervOrg local runtime artifacts (generated while testing)
+assets/
+world.json

@@ -296,6 +296,52 @@
         "Hello, traveler."
       ],
       "created_at": "2026-04-29T16:03:35.717Z"
+    },
+    {
+      "id": "npc_372fb3ae",
+      "prompt": "Recreate a Trojan war, be as detailed as possible",
+      "glb_url": "/assets/npc_372fb3ae.glb",
+      "position": [
+        9.342402285482464,
+        0,
+        20.385261533701048
+      ],
+      "rotation": [
+        0,
+        -0.8751853071796236,
+        0
+      ],
+      "scale": 1,
+      "movement_paused": false,
+      "animation_count": 2,
+      "name": "The Trojan war",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-30T01:38:19.223Z"
+    },
+    {
+      "id": "npc_d3ad0c56",
+      "prompt": "make the trojan war model bigger",
+      "glb_url": "/assets/npc_d3ad0c56.glb",
+      "position": [
+        11.12946881532486,
+        0,
+        22.953688725759058
+      ],
+      "rotation": [
+        0,
+        -2.444000000000028,
+        0
+      ],
+      "scale": 1,
+      "movement_paused": false,
+      "animation_count": 1,
+      "name": "Make the trojan",
+      "dialogue": [
+        "Hello, traveler."
+      ],
+      "created_at": "2026-04-30T01:46:42.675Z"
     }
   ]
 }

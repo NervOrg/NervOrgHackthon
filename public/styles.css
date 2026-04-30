@@ -633,85 +633,113 @@ body[data-mode='play']  .toolbar-play-btn {
 }
 
 /* ========================================================
-   PROMPT COMPOSER  (matches 3DPS PromptComposer)
+   FLOATING PROMPT COMPOSER  (ChatGPT-style, bottom-center)
    ======================================================== */
-.prompt-composer {
+#prompt-composer.composer {
+  position: fixed;
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  width: min(680px, 92vw);
+  z-index: 26;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  margin-top: auto;
-}
-
-.prompt-input-shell {
-  display: grid;
   gap: 6px;
 }
 
-.prompt-input-shell span {
-  color: var(--faint);
-  font-size: 11px;
+.composer-bar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 20px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  box-shadow: var(--shadow-panel), var(--shadow-soft);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.prompt-input-shell textarea {
-  width: 100%;
-  min-height: 80px;
-  resize: vertical;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+.composer-bar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-soft);
+}
+
+.composer-bar textarea {
+  flex: 1;
+  min-height: 36px;
+  max-height: 180px;
+  padding: 8px 0;
+  background: transparent;
+  border: 0;
   outline: 0;
-  padding: 9px 10px;
-  background: var(--surface);
+  resize: none;
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.45;
+  overflow-y: auto;
 }
 
-.prompt-input-shell textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.composer-bar textarea::placeholder { color: var(--faint); }
+
+.composer-bar textarea::-webkit-scrollbar { width: 4px; }
+.composer-bar textarea::-webkit-scrollbar-track { background: transparent; }
+.composer-bar textarea::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+
+.composer-send {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--app-bg);
+  cursor: pointer;
+  transition: background 140ms ease, transform 80ms ease, opacity 140ms ease;
 }
 
-.prompt-input-shell textarea::placeholder { color: var(--faint); }
+.composer-send:hover:not(:disabled) { background: #e8e8ec; }
+.composer-send:active:not(:disabled) { transform: translateY(1px); }
+.composer-send:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.prompt-actions {
+.composer-send svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.composer-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.prompt-hint {
-  color: var(--faint);
-  font-size: 11px;
-  line-height: 1.4;
-  flex: 1;
-}
-
-.prompt-submit {
-  min-width: 56px;
-  min-height: 30px;
+  gap: 12px;
   padding: 0 14px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-ui);
-  white-space: nowrap;
+  font-size: 11px;
+  color: var(--faint);
+  min-height: 14px;
 }
-.prompt-submit:hover:not(:disabled) { background: #2898ff; border-color: #2898ff; }
-.prompt-submit:active { transform: translateY(1px); }
+
+.composer-hint {
+  flex: 1;
+  text-align: left;
+  line-height: 1.4;
+}
 
 #spawn-status {
-  font-size: 11px;
+  flex: 0 0 auto;
+  text-align: right;
   color: var(--muted);
-  padding: 4px 0;
+  font-size: 11px;
 }
 
 /* ========================================================
@@ -923,7 +951,7 @@ input[type='range'] {
    ======================================================== */
 #hud-top { display: none !important; }
 
-/* Positioned above the floating toolbar */
+/* Positioned above the floating toolbar (and above the composer in maker mode) */
 #hud-help {
   position: fixed;
   bottom: 82px;
@@ -941,6 +969,9 @@ input[type='range'] {
   -webkit-backdrop-filter: blur(24px);
   box-shadow: var(--shadow-panel);
 }
+
+/* When the floating composer is visible (maker mode), push the help pill higher */
+body[data-mode='maker'] #hud-help { bottom: 232px; }
 
 #hud-help strong { color: var(--text); margin-right: 4px; }
 
@@ -1080,3 +1111,15 @@ input[type='range'] {
 }
 
 [hidden] { display: none !important; }
+
+/* ========================================================
+   MODE-ONLY VISIBILITY
+   - Elements tagged with data-mode-only are hidden when the
+     active mode (set on body[data-mode]) doesn't match.
+   - In play mode: components window, inspector, prompt
+     composer, and maker-only toolbar tools all disappear.
+   ======================================================== */
+body[data-mode='play']  [data-mode-only='maker'],
+body[data-mode='maker'] [data-mode-only='play'] {
+  display: none !important;
+}
