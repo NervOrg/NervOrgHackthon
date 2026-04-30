@@ -117,6 +117,19 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+let selectedNpcId = null;
+document.addEventListener('select-npc', (e) => {
+  const nextId = e.detail?.id ?? null;
+  if (selectedNpcId && selectedNpcId !== nextId) {
+    world.get(selectedNpcId)?.clearPartSelection();
+  }
+  if (!nextId) {
+    selectedNpcId = null;
+    return;
+  }
+  selectedNpcId = nextId;
+});
+
 function isTypingInForm(el) {
   if (!el) return false;
   const tag = el.tagName;
