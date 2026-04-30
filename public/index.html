@@ -102,10 +102,11 @@
         </div>
       </div>
 
-      <!-- Tabs: Configure | Dialogue -->
+      <!-- Tabs: Configure | Dialogue | Parts -->
       <div class="panel-tabs" role="tablist" aria-label="Inspector tabs">
         <button class="panel-tab panel-tab-active" role="tab" data-tab="configure" type="button">Configure</button>
         <button class="panel-tab" role="tab" data-tab="dialogue" type="button">Dialogue</button>
+        <button class="panel-tab" role="tab" data-tab="parts" type="button">Parts</button>
       </div>
 
       <div class="panel-body">
@@ -159,6 +160,36 @@
           </div>
 
         </div><!-- /dialogue -->
+
+        <!-- â”€â”€ Parts tab pane â”€â”€ -->
+        <div data-tab-pane="parts" hidden>
+          <div id="part-list"></div>
+
+          <div id="part-edit" hidden>
+            <div class="inspector-label" id="part-name-label"></div>
+
+            <label class="inspector-field">
+              <span>Colour</span>
+              <input type="color" id="part-color" value="#ffffff" />
+            </label>
+
+            <label class="inspector-field">
+              <span>Visible</span>
+              <input type="checkbox" id="part-visible" checked />
+            </label>
+
+            <div class="inspector-section-label">Generate Replacement</div>
+            <div class="inspector-row">
+              <input
+                id="part-prompt"
+                type="text"
+                placeholder="describe a replacement..."
+                autocomplete="off"
+              />
+              <button id="part-generate-btn" type="button">Generate</button>
+            </div>
+          </div>
+        </div><!-- /parts -->
 
       </div><!-- .panel-body -->
     </div>
