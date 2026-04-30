@@ -1,0 +1,133 @@
+{
+    "npcs":  [
+                 {
+                     "id":  "npc_14f31079",
+                     "prompt":  "spawn an old wizard",
+                     "glb_url":  "/assets/npc_14f31079.glb",
+                     "position":  [
+                                      8.24993680553721,
+                                      0,
+                                      25.29769441837346
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      1.0199999999999985,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "old wizard",
+                     "dialogue":  [
+                                      "Hello, commander",
+                                      "the guards are ready",
+                                      "we must seize our precious gem"
+                                  ],
+                     "created_at":  "2026-04-29T08:45:09.424Z"
+                 },
+                 {
+                     "id":  "npc_bda80905",
+                     "prompt":  "make 10 solders line in line",
+                     "glb_url":  "/assets/npc_bda80905.glb",
+                     "position":  [
+                                      6.801996404373606,
+                                      -1.1102230246251565E-15,
+                                      17.144998585186347
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      1.82841,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "solders",
+                     "dialogue":  [
+                                      "READY! SIR!",
+                                      "do you find yourself comfortable?"
+                                  ],
+                     "created_at":  "2026-04-29T08:54:23.170Z"
+                 },
+                 {
+                     "id":  "npc_8fbe719d",
+                     "prompt":  "make a simple gemstone",
+                     "glb_url":  "/assets/npc_8fbe719d.glb",
+                     "position":  [
+                                      3.358501319979405,
+                                      0,
+                                      19.924931191333584
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      -2.876814692820495,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "gemstone",
+                     "dialogue":  [
+                                      "i am gemstone"
+                                  ],
+                     "created_at":  "2026-04-29T09:02:59.024Z"
+                 },
+                 {
+                     "id":  "npc_bdaf088f",
+                     "prompt":  "a car",
+                     "glb_url":  "/assets/npc_bdaf088f.glb",
+                     "position":  [
+                                      -1.4452283665580934,
+                                      1.4210854715202004E-14,
+                                      1.6094937379782719
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      0.3180000000000587,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "A car",
+                     "dialogue":  [
+                                      "Hello, traveler."
+                                  ],
+                     "created_at":  "2026-04-29T14:37:59.120Z"
+                 },
+                 {
+                     "id":  "npc_e6943562",
+                     "prompt":  "a wizard wearing a purple hat",
+                     "glb_url":  "/assets/npc_e6943562.glb",
+                     "position":  [
+                                      2.9008770891957827,
+                                      1.4210854715202004E-14,
+                                      1.987755604120851
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      -0.6260000000000006,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "A wizard wearing",
+                     "dialogue":  [
+                                      "Hello, traveler."
+                                  ],
+                     "created_at":  "2026-04-29T14:50:10.089Z"
+                 },
+                 {
+                     "id":  "npc_082326e8",
+                     "prompt":  "a wizard holding a staff",
+                     "glb_url":  "/assets/npc_082326e8.glb",
+                     "position":  [
+                                      -2.047448544093609,
+                                      -1.4210854715202004E-14,
+                                      1.5591029945299546
+                                  ],
+                     "rotation":  [
+                                      0,
+                                      0.43199999999999705,
+                                      0
+                                  ],
+                     "scale":  1,
+                     "name":  "A wizard holding",
+                     "dialogue":  [
+                                      "Hello, traveler."
+                                  ],
+                     "created_at":  "2026-04-29T16:03:35.717Z"
+                 }
+             ]
+}
