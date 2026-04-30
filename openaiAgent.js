@@ -97,6 +97,8 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL || 'gpt-4.1';
   const maxSteps = Number(process.env.OPENAI_MAX_STEPS || 80);
+  const repairAttempts = clampNonNegativeInt(process.env.GENERATION_REPAIR_ATTEMPTS, 1);
+  const repairMaxSteps = clampNonNegativeInt(process.env.GENERATION_REPAIR_MAX_STEPS, Math.max(10, Math.ceil(maxSteps / 2)));
 
   /** @type {any[]} */
   const messages = [
@@ -104,8 +106,57 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     { role: 'user', content: `Build the requested scene now: ${prompt}` },
   ];
 
+  await runAgentLoop({ client, model, messages, openaiTools, glbPath, maxSteps, onProgress, phase: 'generation' });
+
+  if (!glbExistsAndValid(glbPath)) {
+    throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
+  }
+  let validation = await validateGeneratedGlb(glbPath, { prompt });
+  for (let attempt = 0; !validation.ok && attempt < repairAttempts; attempt++) {
+    onProgress(formatValidationForProgress(validation));
+    onProgress(`quality gate failed; repairing model (${attempt + 1}/${repairAttempts})...`);
+    await fsp.rm(glbPath, { force: true });
+    messages.push({
+      role: 'user',
+      content: buildRepairPrompt({
+        prompt,
+        glbPath: blenderGlbPath,
+        issues: validation.issues,
+        warnings: validation.warnings,
+      }),
+    });
+    await runAgentLoop({
+      client,
+      model,
+      messages,
+      openaiTools,
+      glbPath,
+      maxSteps: repairMaxSteps,
+      onProgress,
+      phase: `repair ${attempt + 1}`,
+    });
+    if (!glbExistsAndValid(glbPath)) {
+      throw new Error(`Repair attempt ${attempt + 1} finished but ${path.basename(glbPath)} is missing or too small`);
+    }
+    validation = await validateGeneratedGlb(glbPath, { prompt });
+  }
+  onProgress(formatValidationForProgress(validation));
+  if (!validation.ok) {
+    throw new Error(`Generated GLB failed quality gate after ${repairAttempts} repair attempt(s): ${validation.issues.join(' ')}`);
+  }
+
+  const animationCount = countGlbAnimations(glbPath);
+  onProgress(animationCount > 0
+    ? `GLB contains ${animationCount} animation clip(s)`
+    : 'GLB contains no animation clips; browser procedural motion will be used');
+
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+}
+
+async function runAgentLoop({ client, model, messages, openaiTools, glbPath, maxSteps, onProgress, phase }) {
   for (let step = 0; step < maxSteps; step++) {
-    onProgress(`thinking (step ${step + 1}/${maxSteps})...`);
+    const prefix = phase ? `${phase}: ` : '';
+    onProgress(`${prefix}thinking (step ${step + 1}/${maxSteps})...`);
 
     const completion = await client.chat.completions.create({
       model,
@@ -179,22 +230,21 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
       break;
     }
   }
+}
 
-  if (!glbExistsAndValid(glbPath)) {
-    throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
-  }
-  const validation = await validateGeneratedGlb(glbPath, { prompt });
-  onProgress(formatValidationForProgress(validation));
-  if (!validation.ok) {
-    throw new Error(`Generated GLB failed quality gate: ${validation.issues.join(' ')}`);
-  }
-
-  const animationCount = countGlbAnimations(glbPath);
-  onProgress(animationCount > 0
-    ? `GLB contains ${animationCount} animation clip(s)`
-    : 'GLB contains no animation clips; browser procedural motion will be used');
-
-  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+function buildRepairPrompt({ prompt, glbPath, issues, warnings }) {
+  return [
+    `The generated GLB for "${prompt}" failed backend quality validation.`,
+    '',
+    'Validation issues:',
+    ...issues.map((issue) => `- ${issue}`),
+    ...(warnings.length ? ['', 'Validation warnings:', ...warnings.map((warning) => `- ${warning}`)] : []),
+    '',
+    'Repair the existing Blender scene now. Do not start from scratch unless needed.',
+    'Fix the component assembly, transforms, scale, root hierarchy, and export selection.',
+    `Re-export the repaired model to EXACTLY this path: ${glbPath}`,
+    'After the repaired GLB exists at that path, stop making tool calls and briefly summarize the repair.',
+  ].join('\n');
 }
 
 async function assertBlenderReady() {
@@ -227,6 +277,12 @@ function toBlenderPath(p) {
   const match = normalized.match(/^\/mnt\/([a-zA-Z])\/(.+)$/);
   if (!match) return normalized;
   return `${match[1].toUpperCase()}:/${match[2]}`;
+}
+
+function clampNonNegativeInt(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.floor(parsed));
 }
 
 function countGlbAnimations(p) {
