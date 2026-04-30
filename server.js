@@ -7,7 +7,7 @@ import { WebSocketServer } from 'ws';
 import { v4 as uuid } from 'uuid';
 
 import * as store from './worldStore.js';
-import { generateNpc } from './codexRunner.js';
+import { generateNpc, generatePart } from './codexRunner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -77,6 +77,8 @@ async function handleClientMessage(msg) {
   switch (msg.type) {
     case 'spawn_npc':
       return spawnNpc(msg);
+    case 'spawn_part':
+      return spawnPart(msg);
     case 'update_npc':
       return updateExistingNpc(msg);
     case 'delete_npc':
@@ -134,6 +136,44 @@ async function spawnNpc({ prompt, position, rotation }) {
     log(id, `✗ FAILED after ${elapsed}s: ${err.message || err}`);
     if (err && err.stack) console.error(err.stack);
     broadcast({ type: 'npc_failed', id, error: err.message || String(err) });
+  }
+}
+
+async function spawnPart({ npcId, partId, prompt }) {
+  if (!npcId || typeof partId !== 'string' || !partId || !prompt || typeof prompt !== 'string') return;
+  const cleanPrompt = prompt.trim().slice(0, 500);
+  if (!cleanPrompt) return;
+
+  const state = await store.getState();
+  const npc = state.npcs.find((entry) => entry.id === npcId);
+  if (!npc) return;
+
+  const component = Array.isArray(npc.components)
+    ? npc.components.find((entry) => entry.partId === partId)
+    : null;
+  const partName = component?.name ?? partId;
+
+  log(npcId, `▶ spawn_part "${partId}" prompt="${cleanPrompt}"`);
+  broadcast({ type: 'npc_part_pending', id: npcId, partId });
+
+  try {
+    const { glb_url } = await generatePart({
+      npcId,
+      partId,
+      partName,
+      prompt: cleanPrompt,
+      onProgress: (message) => log(npcId, `  [part:${partId}] ${message}`),
+    });
+
+    if (glb_url) {
+      await store.updateNpcPartGlb(npcId, partId, glb_url);
+    }
+
+    log(npcId, `✓ part ready  glb_url=${glb_url ?? '(fake)'}`);
+    broadcast({ type: 'npc_part_ready', id: npcId, partId, glb_url });
+  } catch (err) {
+    log(npcId, `✗ part FAILED: ${err.message || err}`);
+    broadcast({ type: 'npc_part_failed', id: npcId, partId, error: err.message || String(err) });
   }
 }
 

@@ -64,6 +64,19 @@ export async function updateNpc(id, patch) {
   });
 }
 
+export async function updateNpcPartGlb(npcId, partId, glbUrl) {
+  return mutex.runExclusive(async () => {
+    const w = await load();
+    const npc = w.npcs.find((n) => n.id === npcId);
+    if (!npc || !Array.isArray(npc.components)) return false;
+    const component = npc.components.find((entry) => entry.partId === partId);
+    if (!component) return false;
+    component.glb_url = glbUrl;
+    await flush();
+    return true;
+  });
+}
+
 export async function deleteNpc(id) {
   return mutex.runExclusive(async () => {
     const w = await load();

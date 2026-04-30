@@ -41,6 +41,28 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
 ────────────────────────────────────────────
 `.trimStart();
 
+const PART_REQUIREMENTS_TEMPLATE = `
+
+────────────────────────────────────────────
+PART GENERATION REQUIREMENTS (the system enforces these — do not deviate):
+- Job ID: {{jobId}}
+- You are generating a SINGLE REPLACEMENT PART, not a full character.
+- The part being replaced: {{partName}} (partId: {{partId}})
+- The part belongs to NPC: {{npcId}}
+- Create only the described part in isolation. Do not recreate the full character.
+- Keep the part centred at the world origin with the base/bottom at Y=0 and facing -Z.
+- Apply all transforms before export.
+- Export as GLB to EXACTLY this path:
+    {{glbPath}}
+- Use Blender's GLTF export with format='GLB' and use_selection=True.
+- Name the mesh object using the convention: {{npcType}}_{{partName}} (e.g. Witch_Hat, Car_Wheel_FL).
+- Keep the part under 10,000 polygons.
+- Do NOT create animations for a replacement part unless the prompt specifically requests motion.
+- After the GLB exists at the path above, end your turn with a short summary. No further tool calls.
+- If you cannot fulfil the request, end your turn with a message starting with "ERROR:".
+────────────────────────────────────────────
+`.trimStart();
+
 async function loadSystemPromptTemplate() {
   try {
     const raw = await fsp.readFile(SYSTEM_PROMPT_FILE, 'utf8');
@@ -57,6 +79,18 @@ function buildSystemPrompt({ template, prompt, jobId, glbPath }) {
     .replaceAll('{{glbPath}}', glbPath)
     .replaceAll('{{jobId}}', jobId);
   return userPart + '\n\n' + animationPart + '\n' + requirements;
+}
+
+function buildPartSystemPrompt({ template, prompt, jobId, glbPath, npcId, partId, partName }) {
+  const npcType = npcId.split('_').slice(1).join('_') || 'Npc';
+  const requirements = PART_REQUIREMENTS_TEMPLATE
+    .replaceAll('{{jobId}}', jobId)
+    .replaceAll('{{glbPath}}', glbPath)
+    .replaceAll('{{npcId}}', npcId)
+    .replaceAll('{{partId}}', partId)
+    .replaceAll('{{partName}}', partName)
+    .replaceAll('{{npcType}}', npcType);
+  return template.replaceAll('{{prompt}}', prompt) + '\n\n' + requirements;
 }
 
 function buildAnimationPrompt(prompt) {
@@ -263,6 +297,115 @@ function buildRepairPrompt({ prompt, glbPath, issues, warnings }) {
     `Re-export the repaired model to EXACTLY this path: ${glbPath}`,
     'After the repaired GLB exists at that path, stop making tool calls and briefly summarize the repair.',
   ].join('\n');
+}
+
+export async function generatePart({ npcId, partId, partName = partId, prompt, onProgress = () => {} }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+
+  await fsp.mkdir(ASSETS_DIR, { recursive: true });
+
+  const jobId = `${npcId}_${partId}`;
+  const glbPath = path.join(ASSETS_DIR, `${jobId}.glb`);
+  await fsp.rm(glbPath, { force: true });
+
+  onProgress('Connecting to Blender (MCP) for part generation...');
+  await getMcpClient();
+  const mcpTools = await listMcpTools();
+  if (mcpTools.length === 0) {
+    throw new Error('Blender MCP server reported zero tools — is Blender running with the addon enabled?');
+  }
+  await assertBlenderReady();
+  onProgress(`MCP ready (${mcpTools.length} tools)`);
+
+  const openaiTools = toOpenAITools(mcpTools);
+  const template = await loadSystemPromptTemplate();
+  const systemPrompt = buildPartSystemPrompt({ template, prompt, jobId, glbPath, npcId, partId, partName });
+
+  const client = new OpenAI({ apiKey });
+  const model = process.env.OPENAI_MODEL || 'gpt-4.1';
+  const maxSteps = Number(process.env.OPENAI_MAX_STEPS || 40);
+
+  /** @type {any[]} */
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Generate the replacement part now: ${prompt}` },
+  ];
+
+  for (let step = 0; step < maxSteps; step++) {
+    onProgress(`thinking (step ${step + 1}/${maxSteps})...`);
+
+    const completion = await client.chat.completions.create({
+      model,
+      messages,
+      tools: openaiTools,
+      tool_choice: 'auto',
+      parallel_tool_calls: false,
+    });
+
+    const msg = completion.choices?.[0]?.message;
+    if (!msg) throw new Error('OpenAI returned no message');
+    messages.push(msg);
+
+    const toolCalls = msg.tool_calls || [];
+    if (toolCalls.length === 0) {
+      const content = (msg.content || '').toString().trim();
+      if (content.startsWith('ERROR:')) throw new Error(content.slice(6).trim() || 'agent reported error');
+      onProgress(content ? content.slice(0, 200) : '(agent finished)');
+      break;
+    }
+
+    const pendingImages = [];
+
+    for (const tc of toolCalls) {
+      const fn = tc.function?.name || '';
+      let args = {};
+      try {
+        args = tc.function?.arguments ? JSON.parse(tc.function.arguments) : {};
+      } catch (err) {
+        args = { _parseError: String(err) };
+      }
+      onProgress(`→ ${fn}(${shortJson(args)})`);
+
+      let toolText;
+      try {
+        const result = await callMcpTool(fn, args);
+        const { text, images } = formatMcpResult(result);
+        toolText = text;
+        for (const img of images) pendingImages.push({ name: fn, ...img });
+      } catch (err) {
+        toolText = JSON.stringify({ error: err.message || String(err) });
+      }
+
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        content: toolText.slice(0, 16000),
+      });
+    }
+
+    if (pendingImages.length) {
+      const content = [
+        { type: 'text', text: `Images returned by ${pendingImages.map((i) => i.name).join(', ')}:` },
+        ...pendingImages.map((img) => ({
+          type: 'image_url',
+          image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+        })),
+      ];
+      messages.push({ role: 'user', content });
+    }
+
+    if (glbExistsAndValid(glbPath)) {
+      onProgress('Part GLB detected on disk');
+      break;
+    }
+  }
+
+  if (!glbExistsAndValid(glbPath)) {
+    throw new Error(`Part agent finished but ${path.basename(glbPath)} is missing or too small`);
+  }
+
+  return { glb_url: `/assets/${jobId}.glb` };
 }
 
 async function assertBlenderReady() {
