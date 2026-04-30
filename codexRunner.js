@@ -16,6 +16,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 import { generateWithOpenAI } from './openaiAgent.js';
+import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const JOBS_DIR = path.resolve('jobs');
@@ -174,6 +175,11 @@ async function generateWithCodex({ id, prompt, onProgress = () => {} }) {
   }
   if (stat.size < MIN_GLB_BYTES) {
     throw new Error(`Generated GLB is too small (${stat.size} bytes)`);
+  }
+  const validation = await validateGeneratedGlb(glbPath, { prompt });
+  onProgress(formatValidationForProgress(validation));
+  if (!validation.ok) {
+    throw new Error(`Generated GLB failed quality gate: ${validation.issues.join(' ')}`);
   }
   const animationCount = countGlbAnimations(glbPath);
   onProgress(animationCount > 0
