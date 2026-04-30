@@ -52,6 +52,25 @@ function normalizeGenerationResult(result) {
   };
 }
 
+/**
+ * @param {object} opts
+ * @param {string} opts.npcId
+ * @param {string} opts.partId
+ * @param {string} [opts.partName]
+ * @param {string} opts.prompt
+ * @param {(msg: string) => void} [opts.onProgress]
+ * @returns {Promise<{ glb_url: string | null }>}
+ */
+export async function generatePart(opts) {
+  await fsp.mkdir(ASSETS_DIR, { recursive: true });
+
+  if (process.env.FAKE_GENERATOR === '1') return fakeGeneratePart(opts);
+
+  const backend = (process.env.GENERATOR || 'openai').toLowerCase();
+  if (backend === 'openai') return withTimeout(generatePartWithOpenAI(opts), TIMEOUT_MS);
+  throw new Error(`Unknown GENERATOR=${backend}`);
+}
+
 function withTimeout(promise, ms) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`Generation timed out after ${Math.round(ms / 1000)}s`)), ms);
@@ -83,6 +102,22 @@ async function fakeGenerate({ id, prompt, onProgress = () => {} }) {
   const glbPath = path.join(ASSETS_DIR, `${id}.glb`);
   if (fs.existsSync(glbPath)) await fsp.rm(glbPath, { force: true });
   return { glb_url: null, animation_count: 0, components: [] };
+}
+
+async function fakeGeneratePart({ prompt, onProgress = () => {} }) {
+  onProgress('FAKE_GENERATOR part mode active');
+  const delaySec = Number(process.env.FAKE_DELAY_SEC || 2);
+  for (let i = 0; i < delaySec; i++) {
+    onProgress(`Pretending to generate part... ${i + 1}/${delaySec}`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  void prompt;
+  return { glb_url: null };
+}
+
+async function generatePartWithOpenAI(opts) {
+  const { generatePart: generatePartOAI } = await import('./openaiAgent.js');
+  return generatePartOAI(opts);
 }
 
 // ---------------------------------------------------------------------------
