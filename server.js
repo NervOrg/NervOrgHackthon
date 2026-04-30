@@ -130,6 +130,8 @@ async function handleClientMessage(msg) {
       return spawnNpc(msg);
     case 'update_npc':
       return updateExistingNpc(msg);
+    case 'update_npc_part':
+      return updateExistingNpcPart(msg);
     case 'delete_npc':
       return removeNpc(msg);
     default:
@@ -237,6 +239,14 @@ async function updateExistingNpc({ id, patch }) {
   const updated = await store.updateNpc(id, safePatch);
   if (updated) {
     broadcast({ type: 'npc_updated', id, patch: safePatch });
+  }
+}
+
+async function updateExistingNpcPart({ id, partId, patch }) {
+  if (!id || !partId || !patch || typeof patch !== 'object') return;
+  const result = await store.updateNpcPart(id, partId, patch);
+  if (result) {
+    broadcast({ type: 'npc_part_updated', id: result.id, partId: result.partId, patch: result.patch });
   }
 }
 
