@@ -130,6 +130,12 @@ document.addEventListener('select-npc', (e) => {
   selectedNpcId = nextId;
 });
 
+document.addEventListener('select-part', (e) => {
+  const { npcId, partId } = e.detail || {};
+  if (!npcId || !partId) return;
+  world.get(npcId)?.setSelectedPart(partId);
+});
+
 function isTypingInForm(el) {
   if (!el) return false;
   const tag = el.tagName;

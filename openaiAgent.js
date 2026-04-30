@@ -8,6 +8,7 @@ import { getMcpClient, listMcpTools, callMcpTool, toOpenAITools } from './mcpCli
 const ASSETS_DIR = path.resolve('assets');
 const SYSTEM_PROMPT_FILE = path.resolve('config/systemPrompt.txt');
 const MIN_GLB_BYTES = 1024;
+const MIN_PART_MESHES = 2;
 
 const DEFAULT_SYSTEM_PROMPT = [
   'You are a 3D scene-building assistant driving Blender via the connected MCP tools.',
@@ -26,7 +27,12 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
     {{glbPath}}
 - Center the exported model at the origin with feet/base at Y=0, facing -Z, and apply all transforms before export.
 - If the import creates multiple objects, parent/group the complete imported hierarchy and select every visible mesh/armature/empty that belongs to the requested model before export. Do not export a single child mesh unless it is the entire model.
-- Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out (other objects in the scene may be reused by future requests — DO NOT delete them).
+- Blender is reset before each job, and previous web NPCs are preserved as GLB files in /assets, not as live Blender scene objects.
+- Infer the real-world components of the requested asset before modeling, then create those components as separate named Blender objects/mesh nodes. Keep names user-facing and specific, such as Head, Torso, Left_Arm, Right_Wheel, Hull, Sail, Window, or Door.
+- Do not join, merge, or collapse the component meshes into one final mesh. The final GLB must contain multiple named mesh nodes so the browser can raycast-select and edit each part independently.
+- If an imported/downloaded model arrives as a single mesh, split it into meaningful loose parts when possible or rebuild a simplified multi-part version. Do not export a one-mesh opaque asset.
+- Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out.
+- Before export, clear selection and select only the visible meshes/armatures/empties that belong to this job's requested model.
 - When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
 - Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
@@ -86,6 +92,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     throw new Error('Blender MCP server reported zero tools — is Blender running with the addon enabled?');
   }
   await assertBlenderReady();
+  await resetBlenderSceneForJob(id, onProgress);
   onProgress(`MCP ready (${mcpTools.length} tools)`);
 
   const openaiTools = toOpenAITools(mcpTools);
@@ -173,8 +180,23 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
 
     // Early-out if the GLB has already shown up on disk.
     if (glbExistsAndValid(glbPath)) {
-      onProgress('GLB detected on disk');
-      break;
+      const partInspection = inspectGlbParts(glbPath);
+      if (partInspection.meshCount >= MIN_PART_MESHES) {
+        onProgress(`GLB detected with ${partInspection.meshCount} component mesh node(s)`);
+        break;
+      }
+
+      await fsp.rm(glbPath, { force: true });
+      onProgress(`GLB had only ${partInspection.meshCount} component mesh node(s); asking agent to split it`);
+      messages.push({
+        role: 'user',
+        content: [
+          `The exported GLB had only ${partInspection.meshCount} mesh node(s): ${partInspection.names.join(', ') || '(none)'}.`,
+          'This is not acceptable for part editing.',
+          'Rebuild or split the asset into multiple semantic named Blender mesh objects, parent them under one root, and export again to the exact same GLB path.',
+          'Do not join the parts into one mesh.',
+        ].join('\n'),
+      });
     }
   }
 
@@ -182,7 +204,13 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
   }
 
+  const partInspection = inspectGlbParts(glbPath);
+  if (partInspection.meshCount < MIN_PART_MESHES) {
+    throw new Error(`Generated GLB has only ${partInspection.meshCount} component mesh node(s); expected multiple named parts for editing`);
+  }
+
   const animationCount = countGlbAnimations(glbPath);
+  onProgress(`GLB contains ${partInspection.meshCount} editable component mesh node(s)`);
   onProgress(animationCount > 0
     ? `GLB contains ${animationCount} animation clip(s)`
     : 'GLB contains no animation clips; browser procedural motion will be used');
@@ -203,6 +231,36 @@ async function assertBlenderReady() {
   const { text } = formatMcpResult(result);
   if (result?.isError || /could not connect|connection refused|addon is running/i.test(text)) {
     throw new Error(`Blender MCP is not connected to Blender: ${text.slice(0, 300)}`);
+  }
+}
+
+async function resetBlenderSceneForJob(id, onProgress) {
+  onProgress('Resetting Blender scene for this job...');
+  const code = `
+import bpy
+
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete()
+
+for collection in (
+    bpy.data.meshes,
+    bpy.data.materials,
+    bpy.data.images,
+    bpy.data.armatures,
+    bpy.data.actions,
+):
+    for item in list(collection):
+        if item.users == 0:
+            collection.remove(item)
+`.trim();
+
+  const result = await callMcpTool('execute_blender_code', {
+    code,
+    user_prompt: `reset Blender scene for ${id}`,
+  });
+  const { text } = formatMcpResult(result);
+  if (result?.isError || /error|traceback/i.test(text)) {
+    throw new Error(`Could not reset Blender scene: ${text.slice(0, 500)}`);
   }
 }
 
@@ -227,6 +285,27 @@ function countGlbAnimations(p) {
   } catch {
     return 0;
   }
+}
+
+function inspectGlbParts(p) {
+  try {
+    const json = readGlbJson(p);
+    const names = (json.nodes || [])
+      .filter((node) => Number.isInteger(node.mesh))
+      .map((node, index) => String(node.name || `part_${index + 1}`));
+    return { meshCount: names.length, names };
+  } catch {
+    return { meshCount: 0, names: [] };
+  }
+}
+
+function readGlbJson(p) {
+  const data = fs.readFileSync(p);
+  if (data.toString('ascii', 0, 4) !== 'glTF') throw new Error('not a GLB file');
+  const jsonLength = data.readUInt32LE(12);
+  const jsonType = data.toString('ascii', 16, 20);
+  if (jsonType !== 'JSON') throw new Error('GLB JSON chunk missing');
+  return JSON.parse(data.subarray(20, 20 + jsonLength).toString('utf8'));
 }
 
 function formatMcpResult(result) {

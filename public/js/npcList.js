@@ -2,6 +2,7 @@ import { on, send } from './ws.js';
 
 const npcs = new Map();
 const gens = new Map();
+const npcParts = new Map();
 const partState = new Map();
 let selectedId = null;
 let _activeNpcId = null;
@@ -23,8 +24,12 @@ function setWsStatus(kind, label) {
 
 on('world_state', (msg) => {
   npcs.clear();
+  npcParts.clear();
   if (msg.npcs) {
-    for (const npc of Object.values(msg.npcs)) npcs.set(npc.id, { ...npc });
+    for (const npc of Object.values(msg.npcs)) {
+      npcs.set(npc.id, { ...npc });
+      cacheNpcComponents(npc);
+    }
   }
   renderList();
 });
@@ -58,8 +63,12 @@ on('npc_progress', (msg) => {
 });
 
 on('npc_ready', (msg) => {
-  const npc = msg.npc || msg;
+  const npc = { ...(msg.npc || msg) };
+  if (!Array.isArray(npc.components) && Array.isArray(msg.components)) {
+    npc.components = msg.components;
+  }
   npcs.set(npc.id, { ...npc, pending: false });
+  cacheNpcComponents(npc);
   const gen = gens.get(npc.id) || { msgs: [] };
   Object.assign(gen, {
     name: npc.name || npc.prompt || npc.id,
@@ -95,6 +104,7 @@ on('npc_updated', (msg) => {
 
 on('npc_deleted', (msg) => {
   npcs.delete(msg.id);
+  npcParts.delete(msg.id);
   gens.delete(msg.id);
   if (selectedId === msg.id) {
     selectedId = null;
@@ -192,6 +202,15 @@ document.addEventListener('select-part', (e) => {
 
   const panel = document.getElementById('edit-panel');
   if (panel && !panel.hidden) switchToTab('parts');
+});
+
+document.addEventListener('npc-parts-ready', (e) => {
+  const { npcId, parts } = e.detail || {};
+  if (!npcId || !Array.isArray(parts)) return;
+  npcParts.set(npcId, normalizeParts(parts));
+  const npc = npcs.get(npcId);
+  if (npc) npc.components = npcParts.get(npcId);
+  if (npcId === selectedId) renderPartList(npc);
 });
 
 document.getElementById('part-color')?.addEventListener('input', (e) => {
@@ -339,29 +358,36 @@ function renderPartList(npc) {
 }
 
 function getPartsForNpc(npc) {
-  if (npc && typeof npc.getPartIds === 'function') {
-    return npc.getPartIds().map((partId) => ({
-      partId,
-      name: getPartName(npc, partId),
-    }));
+  const npcId = npc?.id || selectedId;
+  if (npcId && npcParts.has(npcId)) return npcParts.get(npcId);
+  const liveParts = window.__npcPartsByNpcId?.get?.(npcId);
+  if (Array.isArray(liveParts)) {
+    const parts = normalizeParts(liveParts);
+    npcParts.set(npcId, parts);
+    return parts;
   }
-
-  if (npc?._parts instanceof Map) {
-    return Array.from(npc._parts.keys()).map((partId) => ({
-      partId,
-      name: getPartName(npc, partId),
-    }));
-  }
-
-  return [
-    { partId: 'stub_hat', name: 'Hat' },
-    { partId: 'stub_body', name: 'Body' },
-    { partId: 'stub_accessory', name: 'Accessory' },
-  ];
+  if (Array.isArray(npc?.components)) return normalizeParts(npc.components);
+  return [];
 }
 
 function getPartName(npc, partId) {
-  return npc?.getPartName?.(partId) ?? humanizePartId(partId);
+  const parts = getPartsForNpc(npc);
+  const part = parts.find((entry) => entry.partId === partId);
+  return part?.name ?? humanizePartId(partId);
+}
+
+function cacheNpcComponents(npc) {
+  if (!npc?.id || !Array.isArray(npc.components)) return;
+  npcParts.set(npc.id, normalizeParts(npc.components));
+}
+
+function normalizeParts(parts) {
+  return parts
+    .filter((part) => part && typeof part.partId === 'string')
+    .map((part) => ({
+      partId: part.partId,
+      name: part.name || humanizePartId(part.partId),
+    }));
 }
 
 function humanizePartId(partId) {

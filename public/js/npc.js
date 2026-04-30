@@ -27,6 +27,14 @@ function uniquePartId(parts, partId, index) {
   return `${partId}_${index + 1}`;
 }
 
+function dispatchNpcPartsReady(npcId, parts) {
+  window.__npcPartsByNpcId ??= new Map();
+  window.__npcPartsByNpcId.set(npcId, parts);
+  document.dispatchEvent(new CustomEvent('npc-parts-ready', {
+    detail: { npcId, parts },
+  }));
+}
+
 /**
  * Build a "loading blob" used while a GLB is being generated. It's a glowing
  * low-poly icosphere that pulses, bobs, and rotates. The animation runs in
@@ -303,6 +311,8 @@ export class Npc {
       this._parts.set(partId, object);
       fallbackIndex++;
     });
+
+    dispatchNpcPartsReady(this.id, this.getParts());
   }
 
   _setupClipAnimation(gltf) {
@@ -497,6 +507,13 @@ export class Npc {
 
   getPartIds() {
     return Array.from(this._parts.keys());
+  }
+
+  getParts() {
+    return this.getPartIds().map((partId) => ({
+      partId,
+      name: this.getPartName(partId),
+    }));
   }
 
   getPartName(partId) {
