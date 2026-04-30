@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import { getMcpClient, listMcpTools, callMcpTool } from '../mcpClient.js';
 
 try {
