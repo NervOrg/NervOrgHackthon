@@ -76,6 +76,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
 
   await fsp.mkdir(ASSETS_DIR, { recursive: true });
   const glbPath = path.join(ASSETS_DIR, `${id}.glb`);
+  const blenderGlbPath = toBlenderPath(glbPath);
   await fsp.rm(glbPath, { force: true });
 
   // Make sure MCP is up before we consume any OpenAI tokens.
@@ -90,7 +91,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
 
   const openaiTools = toOpenAITools(mcpTools);
   const template = await loadSystemPromptTemplate();
-  const systemPrompt = buildSystemPrompt({ template, prompt, jobId: id, glbPath });
+  const systemPrompt = buildSystemPrompt({ template, prompt, jobId: id, glbPath: blenderGlbPath });
 
   const client = new OpenAI({ apiKey });
   const model = process.env.OPENAI_MODEL || 'gpt-4.1';
@@ -213,6 +214,13 @@ function glbExistsAndValid(p) {
   } catch {
     return false;
   }
+}
+
+function toBlenderPath(p) {
+  const normalized = path.resolve(p).replaceAll('\\', '/');
+  const match = normalized.match(/^\/mnt\/([a-zA-Z])\/(.+)$/);
+  if (!match) return normalized;
+  return `${match[1].toUpperCase()}:/${match[2]}`;
 }
 
 function countGlbAnimations(p) {
