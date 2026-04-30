@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Mutex } from 'async-mutex';
 
 const WORLD_FILE = path.resolve('world.json');
+const DEMO_WORLD_FILE = path.resolve('demo-world.json');
 const TMP_FILE = `${WORLD_FILE}.tmp`;
 
 const mutex = new Mutex();
@@ -14,7 +15,15 @@ async function load() {
     const raw = await fs.readFile(WORLD_FILE, 'utf8');
     cache = JSON.parse(raw);
   } catch {
-    cache = { npcs: [] };
+    cache = null;
+  }
+  if (!cache || !Array.isArray(cache.npcs) || cache.npcs.length === 0) {
+    try {
+      const raw = await fs.readFile(DEMO_WORLD_FILE, 'utf8');
+      cache = JSON.parse(raw);
+    } catch {
+      cache = { npcs: [] };
+    }
   }
   if (!Array.isArray(cache.npcs)) cache.npcs = [];
   cache.npcs = cache.npcs.map(normalizeNpc);

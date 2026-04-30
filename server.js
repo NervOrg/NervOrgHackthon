@@ -24,12 +24,9 @@ const PORT = Number(process.env.PORT || 3000);
 
 const app = express();
 app.use(express.json());
-app.use('/assets', express.static(path.join(__dirname, 'assets'), {
-  fallthrough: false,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'no-store');
-  },
-}));
+const staticHeaders = (res) => res.setHeader('Cache-Control', 'no-store');
+app.use('/assets', express.static(path.join(__dirname, 'assets'), { setHeaders: staticHeaders }));
+app.use('/assets', express.static(path.join(__dirname, 'demo-assets'), { setHeaders: staticHeaders }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/state', async (_req, res) => {
