@@ -15,8 +15,9 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
-import { generateWithOpenAI } from './openaiAgent.js';
+import { buildComponentManifest, generateWithOpenAI } from './openaiAgent.js';
 import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
+import { inspectGlb } from './glbInspector.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const JOBS_DIR = path.resolve('jobs');
@@ -30,18 +31,25 @@ const MIN_GLB_BYTES = 1024;
  * @param {string} opts.id
  * @param {string} opts.prompt
  * @param {(msg: string) => void} [opts.onProgress]
- * @returns {Promise<{ glb_url: string | null, animation_count?: number }>}
+ * @returns {Promise<{ glb_url: string | null, animation_count?: number, components: Array<object> }>}
  */
 export async function generateNpc(opts) {
   await fsp.mkdir(ASSETS_DIR, { recursive: true });
   await fsp.mkdir(JOBS_DIR, { recursive: true });
 
-  if (process.env.FAKE_GENERATOR === '1') return fakeGenerate(opts);
+  if (process.env.FAKE_GENERATOR === '1') return normalizeGenerationResult(await fakeGenerate(opts));
 
   const backend = (process.env.GENERATOR || 'openai').toLowerCase();
-  if (backend === 'openai') return withTimeout(generateWithOpenAI(opts), TIMEOUT_MS);
-  if (backend === 'codex') return withTimeout(generateWithCodex(opts), TIMEOUT_MS);
+  if (backend === 'openai') return normalizeGenerationResult(await withTimeout(generateWithOpenAI(opts), TIMEOUT_MS));
+  if (backend === 'codex') return normalizeGenerationResult(await withTimeout(generateWithCodex(opts), TIMEOUT_MS));
   throw new Error(`Unknown GENERATOR=${backend}`);
+}
+
+function normalizeGenerationResult(result) {
+  return {
+    ...result,
+    components: Array.isArray(result?.components) ? result.components : [],
+  };
 }
 
 function withTimeout(promise, ms) {
@@ -74,7 +82,7 @@ async function fakeGenerate({ id, prompt, onProgress = () => {} }) {
   void prompt;
   const glbPath = path.join(ASSETS_DIR, `${id}.glb`);
   if (fs.existsSync(glbPath)) await fsp.rm(glbPath, { force: true });
-  return { glb_url: null, animation_count: 0 };
+  return { glb_url: null, animation_count: 0, components: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +108,8 @@ function buildCodexPrompt({ id, prompt, glbPath, statusPath }) {
     '- When the asset can plausibly move, create a short looping animation action using Blender keyframes, bones, or object transforms.',
     '- Export animation data in the GLB with export_animations=True, export_skins=True, and export_bake_animation=True.',
     '- Use a natural real-world scale for the requested asset. Characters are usually ~1.8 Blender units tall; vehicles and props should use appropriate proportions.',
+    '- Name every distinct logical part as a separate mesh object using ModelType_PartName names such as Car_Body, Car_Wheel_FL, Witch_Hat, or Robot_Arm_Left.',
+    '- Do not merge separate customizable parts into one mesh; each part a user might edit independently must remain a named object.',
     '',
     'When you are completely done, write a status file to:',
     `  ${statusPath}`,
@@ -185,7 +195,24 @@ async function generateWithCodex({ id, prompt, onProgress = () => {} }) {
   onProgress(animationCount > 0
     ? `GLB contains ${animationCount} animation clip(s)`
     : 'GLB contains no animation clips; browser procedural motion will be used');
-  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+  const components = await extractComponentsFromGlb(glbPath, onProgress);
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount, components };
+}
+
+async function extractComponentsFromGlb(glbPath, onProgress) {
+  try {
+    const inspection = await inspectGlb(glbPath);
+    const components = buildComponentManifest(inspection);
+    onProgress(
+      components.length > 0
+        ? `Found ${components.length} named part(s): ${components.map((component) => component.name).join(', ')}`
+        : 'No named parts found in GLB; components list will be empty'
+    );
+    return components;
+  } catch (err) {
+    onProgress(`Part manifest extraction failed: ${err.message}`);
+    return [];
+  }
 }
 
 function countGlbAnimations(p) {

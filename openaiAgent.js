@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 
 import { getMcpClient, listMcpTools, callMcpTool, toOpenAITools } from './mcpClient.js';
 import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
+import { inspectGlb } from './glbInspector.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const SYSTEM_PROMPT_FILE = path.resolve('config/systemPrompt.txt');
@@ -31,6 +32,10 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
 - When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
 - Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
+- Name every distinct part of the model as a separate mesh object using the pattern
+  ModelType_PartName (e.g. Witch_Hat, Witch_Robe, Car_Wheel_FL). Do not merge
+  separate logical parts into one mesh. Each part the user might customise must be
+  its own named object.
 - After the GLB file exists at the path above, you are done. End your turn with a brief summary message and no further tool calls.
 - If you cannot fulfil the request, end your turn with a short message starting with "ERROR:" describing why — do not silently give up.
 ────────────────────────────────────────────
@@ -150,7 +155,20 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     ? `GLB contains ${animationCount} animation clip(s)`
     : 'GLB contains no animation clips; browser procedural motion will be used');
 
-  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount };
+  let components = [];
+  try {
+    const inspection = await inspectGlb(glbPath);
+    components = buildComponentManifest(inspection);
+    onProgress(
+      components.length > 0
+        ? `Found ${components.length} named part(s): ${components.map((component) => component.name).join(', ')}`
+        : 'No named parts found in GLB; components list will be empty'
+    );
+  } catch (inspectErr) {
+    onProgress(`Part manifest extraction failed: ${inspectErr.message}`);
+  }
+
+  return { glb_url: `/assets/${id}.glb`, animation_count: animationCount, components };
 }
 
 async function runAgentLoop({ client, model, messages, openaiTools, glbPath, maxSteps, onProgress, phase }) {
@@ -283,6 +301,36 @@ function clampNonNegativeInt(value, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(0, Math.floor(parsed));
+}
+
+export function buildComponentManifest(report) {
+  const nodes = report.bounds?.nodes ?? [];
+  const named = nodes.filter((entry) => entry.nodeName && entry.nodeName.trim());
+  const source = named.length > 0 ? named : nodes;
+
+  return source.map((entry) => ({
+    partId: slugifyPartId(entry.nodeName || `part_${entry.meshIndex ?? 0}`),
+    name: humanizePartName(entry.nodeName || `Part ${entry.meshIndex ?? 0}`),
+    meshIndex: entry.meshIndex ?? null,
+    bounds: entry.worldBounds ?? null,
+  }));
+}
+
+export function slugifyPartId(value) {
+  return String(value)
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'part';
+}
+
+export function humanizePartName(value) {
+  return String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
 }
 
 function countGlbAnimations(p) {

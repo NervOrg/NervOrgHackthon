@@ -7,4 +7,13 @@ Treat animation words in the user's prompt as hard requirements. If the prompt a
 
 Most importantly, all objects should be visible and not overlap on each other.
 
+PART NAMING REQUIREMENT:
+- Create a distinct named mesh object for each logical part of the model.
+- Name every mesh object clearly using the pattern ModelType_PartName.
+  Examples: Witch_Hat, Witch_Robe, Witch_Broom, Car_Body, Car_Wheel_FL,
+  Robot_Head, Robot_Arm_Left, Chair_Seat, Chair_Leg_FR.
+- Do not merge separate logical parts into a single mesh.
+- Each part that a user might want to customise independently must be its own object.
+- Apply all modifiers and set the origin to each part's local centre before export.
+
 Request: {{prompt}}

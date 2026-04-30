@@ -17,6 +17,7 @@ async function load() {
     cache = { npcs: [] };
   }
   if (!Array.isArray(cache.npcs)) cache.npcs = [];
+  cache.npcs = cache.npcs.map(normalizeNpc);
   return cache;
 }
 
@@ -29,17 +30,24 @@ export async function getState() {
   return mutex.runExclusive(async () => {
     const w = await load();
     // Return a deep-ish copy so callers can't mutate the cache.
-    return { npcs: w.npcs.map((n) => ({ ...n })) };
+    return { npcs: w.npcs.map((n) => ({ ...normalizeNpc(n) })) };
   });
 }
 
 export async function addNpc(npc) {
   return mutex.runExclusive(async () => {
     const w = await load();
-    w.npcs.push(npc);
+    w.npcs.push(normalizeNpc(npc));
     await flush();
-    return { ...npc };
+    return { ...normalizeNpc(npc) };
   });
+}
+
+function normalizeNpc(npc) {
+  return {
+    ...npc,
+    components: Array.isArray(npc.components) ? npc.components : [],
+  };
 }
 
 export async function updateNpc(id, patch) {
