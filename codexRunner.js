@@ -108,6 +108,8 @@ function buildCodexPrompt({ id, prompt, glbPath, statusPath }) {
     '- When the asset can plausibly move, create a short looping animation action using Blender keyframes, bones, or object transforms.',
     '- Export animation data in the GLB with export_animations=True, export_skins=True, and export_bake_animation=True.',
     '- Use a natural real-world scale for the requested asset. Characters are usually ~1.8 Blender units tall; vehicles and props should use appropriate proportions.',
+    '- Name every distinct logical part as a separate mesh object using ModelType_PartName names such as Car_Body, Car_Wheel_FL, Witch_Hat, or Robot_Arm_Left.',
+    '- Do not merge separate customizable parts into one mesh; each part a user might edit independently must remain a named object.',
     '',
     'When you are completely done, write a status file to:',
     `  ${statusPath}`,
