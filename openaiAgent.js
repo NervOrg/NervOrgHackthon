@@ -4,6 +4,7 @@ import path from 'node:path';
 import OpenAI from 'openai';
 
 import { getMcpClient, listMcpTools, callMcpTool, toOpenAITools } from './mcpClient.js';
+import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const SYSTEM_PROMPT_FILE = path.resolve('config/systemPrompt.txt');
@@ -181,6 +182,11 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
 
   if (!glbExistsAndValid(glbPath)) {
     throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
+  }
+  const validation = await validateGeneratedGlb(glbPath, { prompt });
+  onProgress(formatValidationForProgress(validation));
+  if (!validation.ok) {
+    throw new Error(`Generated GLB failed quality gate: ${validation.issues.join(' ')}`);
   }
 
   const animationCount = countGlbAnimations(glbPath);
