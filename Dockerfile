@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # Application source
-COPY server.js worldStore.js codexRunner.js openaiAgent.js generationContract.js mcpClient.js ./
+COPY server.js worldStore.js codexRunner.js openaiAgent.js generationContract.js generationQualityGate.js glbInspector.js mcpClient.js ./
 COPY config/ ./config/
 COPY public/ ./public/
 COPY scripts/ ./scripts/

@@ -10,6 +10,8 @@ import { inspectGlb } from './glbInspector.js';
 const ASSETS_DIR = path.resolve('assets');
 const SYSTEM_PROMPT_FILE = path.resolve('config/systemPrompt.txt');
 const MIN_GLB_BYTES = 1024;
+const MIN_PART_MESHES = 2;
+const MIN_MATERIAL_COLORS = 2;
 
 const DEFAULT_SYSTEM_PROMPT = [
   'You are a 3D scene-building assistant driving Blender via the connected MCP tools.',
@@ -28,8 +30,16 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
     {{glbPath}}
 - Center the exported model at the origin with feet/base at Y=0, facing -Z, and apply all transforms before export.
 - If the import creates multiple objects, parent/group the complete imported hierarchy and select every visible mesh/armature/empty that belongs to the requested model before export. Do not export a single child mesh unless it is the entire model.
-- Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out (other objects in the scene may be reused by future requests — DO NOT delete them).
+- Before creating Blender geometry, make an explicit real-world reference plan: describe the requested asset's normal visible components and plausible component colors/materials, then build from that plan.
+- Infer the real-world components of the requested asset before modeling, then create those components as separate named Blender objects/mesh nodes. Keep names user-facing and specific, such as Head, Torso, Left_Arm, Right_Wheel, Hull, Sail, Window, or Door.
+- Do not join, merge, or collapse the component meshes into one final mesh. The final GLB must contain multiple named mesh nodes so the browser can raycast-select and edit each part independently.
+- If an imported/downloaded model arrives as a single mesh, split it into meaningful loose parts when possible or rebuild a simplified multi-part version. Do not export a one-mesh opaque asset.
+- Assign every component mesh at least one named Blender material with a visible base color before export. Use plausible real-world colors/materials for the requested asset; do not leave any mesh with an unassigned/default material slot, and do not use one generic grey/white material for all parts.
+- Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out.
+- Export materials in the GLB: set export_materials='EXPORT' when calling bpy.ops.export_scene.gltf.
+- Before export, clear selection and select only the visible meshes/armatures/empties that belong to this job's requested model.
 - When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
+- For multi-part models, parent all visible components under one root before keyframing. Animate the root for whole-model motion, or animate multiple actual moving components. Do not animate only one isolated mesh unless it is the parent of all other visible parts.
 - Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
 - Name every distinct part of the model as a separate mesh object using the pattern
@@ -100,6 +110,8 @@ function buildAnimationPrompt(prompt) {
     '- If the user asks for waving, walking, dancing, spinning, breathing, hovering, pulsing, attacking, driving, flying, or any other motion, create that exact motion as a short seamless looping Blender action.',
     '- Name the primary action clearly, such as Idle, Wave, Walk, Hover, Spin, Dance, Drive, Fly, or Attack.',
     '- If the prompt does not specify motion but the asset can plausibly move, create a subtle Idle loop.',
+    '- For multi-part models, parent every visible component under one root before keyframing. Animate the root for whole-model idle motion, or animate multiple named moving parts for local motion.',
+    '- Do not animate only one isolated component unless every other visible component is parented under that animated component.',
     '- Prefer simple reliable keyframed object, bone, or shape-key animation over complex rigs that may fail to export.',
     `- User prompt to interpret for animation intent: "${prompt}"`,
   ].join('\n');
@@ -150,7 +162,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
   if (!glbExistsAndValid(glbPath)) {
     throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
   }
-  let validation = await validateGeneratedGlb(glbPath, { prompt });
+  let validation = await validateGeneratedOutput(glbPath, { prompt });
   for (let attempt = 0; !validation.ok && attempt < repairAttempts; attempt++) {
     onProgress(formatValidationForProgress(validation));
     onProgress(`quality gate failed; repairing model (${attempt + 1}/${repairAttempts})...`);
@@ -177,11 +189,18 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     if (!glbExistsAndValid(glbPath)) {
       throw new Error(`Repair attempt ${attempt + 1} finished but ${path.basename(glbPath)} is missing or too small`);
     }
-    validation = await validateGeneratedGlb(glbPath, { prompt });
+    validation = await validateGeneratedOutput(glbPath, { prompt });
   }
   onProgress(formatValidationForProgress(validation));
   if (!validation.ok) {
     throw new Error(`Generated GLB failed quality gate after ${repairAttempts} repair attempt(s): ${validation.issues.join(' ')}`);
+  }
+  if (validation.partInspection) {
+    onProgress(
+      `GLB part validation passed (${validation.partInspection.meshCount} part mesh node(s), `
+      + `${validation.partInspection.materialCount} material(s), `
+      + `${validation.partInspection.distinctColorCount} distinct color(s))`
+    );
   }
 
   const animationCount = countGlbAnimations(glbPath);
@@ -282,6 +301,40 @@ async function runAgentLoop({ client, model, messages, openaiTools, glbPath, max
       break;
     }
   }
+}
+
+async function validateGeneratedOutput(glbPath, { prompt }) {
+  const validation = await validateGeneratedGlb(glbPath, { prompt });
+  const partInspection = inspectGlbParts(glbPath);
+  const partIssues = [];
+  const partWarnings = [];
+
+  if (partInspection.meshCount < MIN_PART_MESHES) {
+    partIssues.push(`GLB has only ${partInspection.meshCount} component mesh node(s); expected multiple named parts for editing.`);
+  }
+  if (partInspection.unassignedPrimitiveCount > 0) {
+    partIssues.push(`GLB has ${partInspection.unassignedPrimitiveCount} mesh primitive(s) without assigned materials.`);
+  }
+  if (partInspection.materialCount < partInspection.requiredMaterialCount) {
+    partIssues.push(`GLB has only ${partInspection.materialCount} material(s); expected at least ${partInspection.requiredMaterialCount} plausible component material(s).`);
+  }
+  if (partInspection.distinctColorCount < MIN_MATERIAL_COLORS) {
+    partIssues.push(`GLB has only ${partInspection.distinctColorCount} distinct material color(s); expected real component colors.`);
+  }
+  if (!partInspection.animationValid) {
+    partIssues.push(`GLB animation targets only an isolated part (${partInspection.animationTargetNames.join(', ') || 'none'}); expected root animation or multiple moving components.`);
+  }
+  if (partInspection.neutralMaterialCount > 0) {
+    partWarnings.push(`GLB has ${partInspection.neutralMaterialCount} neutral/default material color(s).`);
+  }
+
+  return {
+    ...validation,
+    ok: validation.ok && partIssues.length === 0,
+    issues: [...validation.issues, ...partIssues],
+    warnings: [...validation.warnings, ...partWarnings],
+    partInspection,
+  };
 }
 
 function buildRepairPrompt({ prompt, glbPath, issues, warnings }) {
@@ -488,6 +541,126 @@ function countGlbAnimations(p) {
   } catch {
     return 0;
   }
+}
+
+function inspectGlbParts(p) {
+  try {
+    const json = readGlbJson(p);
+    const names = (json.nodes || [])
+      .filter((node) => Number.isInteger(node.mesh))
+      .map((node, index) => String(node.name || `part_${index + 1}`));
+    const materials = Array.isArray(json.materials) ? json.materials : [];
+    const materialColors = materials.map((material) => materialBaseColor(material));
+    const distinctColorCount = new Set(materialColors.map((color) => colorKey(color))).size;
+    const neutralMaterialCount = materialColors.filter((color) => isNeutralDefaultColor(color)).length;
+
+    let primitiveCount = 0;
+    let unassignedPrimitiveCount = 0;
+    for (const mesh of json.meshes || []) {
+      for (const primitive of mesh.primitives || []) {
+        primitiveCount++;
+        if (!Number.isInteger(primitive.material)) unassignedPrimitiveCount++;
+      }
+    }
+
+    const requiredMaterialCount = Math.min(3, Math.max(MIN_MATERIAL_COLORS, names.length));
+    const animationInspection = inspectGlbAnimation(json);
+    return {
+      meshCount: names.length,
+      names,
+      materialCount: materials.length,
+      requiredMaterialCount,
+      distinctColorCount,
+      neutralMaterialCount,
+      primitiveCount,
+      unassignedPrimitiveCount,
+      ...animationInspection,
+    };
+  } catch {
+    return {
+      meshCount: 0,
+      names: [],
+      materialCount: 0,
+      requiredMaterialCount: MIN_MATERIAL_COLORS,
+      distinctColorCount: 0,
+      neutralMaterialCount: 0,
+      primitiveCount: 0,
+      unassignedPrimitiveCount: 0,
+      animationCount: 0,
+      animatedNodeCount: 0,
+      animationTargetNames: [],
+      animationTargetsRoot: false,
+      animationValid: true,
+    };
+  }
+}
+
+function inspectGlbAnimation(json) {
+  const animations = Array.isArray(json.animations) ? json.animations : [];
+  if (animations.length === 0) {
+    return {
+      animationCount: 0,
+      animatedNodeCount: 0,
+      animationTargetNames: [],
+      animationTargetsRoot: false,
+      animationValid: true,
+    };
+  }
+
+  const targetNodeIndexes = new Set();
+  for (const animation of animations) {
+    for (const channel of animation.channels || []) {
+      if (Number.isInteger(channel?.target?.node)) {
+        targetNodeIndexes.add(channel.target.node);
+      }
+    }
+  }
+
+  const meshNodeIndexes = new Set(
+    (json.nodes || [])
+      .map((node, index) => (Number.isInteger(node.mesh) ? index : null))
+      .filter((index) => index !== null)
+  );
+  const rootIndexes = new Set((json.scenes?.[json.scene || 0]?.nodes || []).filter(Number.isInteger));
+  const animationTargetsRoot = [...targetNodeIndexes].some((index) => rootIndexes.has(index));
+  const animatedMeshTargetCount = [...targetNodeIndexes].filter((index) => meshNodeIndexes.has(index)).length;
+  const animationTargetNames = [...targetNodeIndexes].map((index) => json.nodes?.[index]?.name || `node_${index}`);
+
+  return {
+    animationCount: animations.length,
+    animatedNodeCount: targetNodeIndexes.size,
+    animationTargetNames,
+    animationTargetsRoot,
+    animationValid: animationTargetsRoot || animatedMeshTargetCount !== 1 || meshNodeIndexes.size <= 1,
+  };
+}
+
+function materialBaseColor(material) {
+  const factor = material?.pbrMetallicRoughness?.baseColorFactor;
+  return Array.isArray(factor) ? factor.slice(0, 3).map(Number) : [1, 1, 1];
+}
+
+function colorKey(color) {
+  return color.map((channel) => Math.round(Math.max(0, Math.min(1, channel)) * 10)).join(',');
+}
+
+function isNeutralDefaultColor(color) {
+  const [r, g, b] = color;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const saturation = max <= 0 ? 0 : (max - min) / max;
+  const isGrey = saturation < 0.08;
+  const isDefaultWhiteOrGrey = min > 0.72 && max < 1.01;
+  return isGrey && isDefaultWhiteOrGrey;
+}
+
+function readGlbJson(p) {
+  const data = fs.readFileSync(p);
+  if (data.toString('ascii', 0, 4) !== 'glTF') throw new Error('not a GLB file');
+  const jsonLength = data.readUInt32LE(12);
+  const jsonType = data.toString('ascii', 16, 20);
+  if (jsonType !== 'JSON') throw new Error('GLB JSON chunk missing');
+  return JSON.parse(data.subarray(20, 20 + jsonLength).toString('utf8'));
 }
 
 function formatMcpResult(result) {
