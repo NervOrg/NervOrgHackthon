@@ -46,13 +46,15 @@ export class World {
     });
 
     ws.on('npc_ready', (msg) => {
-      const npc = this.npcs.get(msg.npc.id);
+      const readyNpc = msg.npc ?? msg;
+      const npc = this.npcs.get(readyNpc.id);
       if (npc) {
-        npc.promote(msg.npc);
+        npc.setComponents(msg.components ?? readyNpc.components ?? []);
+        npc.promote(readyNpc);
       } else {
-        this._add(msg.npc);
+        this._add(readyNpc);
       }
-      toast(`"${msg.npc.name}" is here.`, 'ok');
+      toast(`"${readyNpc.name}" is here.`, 'ok');
     });
 
     ws.on('npc_failed', (msg) => {
@@ -109,7 +111,11 @@ export class World {
   npcFromObject(obj) {
     let cur = obj;
     while (cur) {
-      if (cur.userData && cur.userData.npcId) return this.npcs.get(cur.userData.npcId);
+      const partId = cur.userData?.partId ?? null;
+      const npcId = cur.userData?.npcId ?? null;
+      if (npcId && this.npcs.has(npcId)) {
+        return { npc: this.npcs.get(npcId), partId };
+      }
       cur = cur.parent;
     }
     return null;

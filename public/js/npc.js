@@ -14,6 +14,19 @@ function colorForId(id) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
+function slugifyPartId(value, fallback = 'part') {
+  const slug = String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug || fallback;
+}
+
+function uniquePartId(parts, partId, index) {
+  if (!parts.has(partId)) return partId;
+  return `${partId}_${index + 1}`;
+}
+
 /**
  * Build a "loading blob" used while a GLB is being generated. It's a glowing
  * low-poly icosphere that pulses, bobs, and rotates. The animation runs in
@@ -142,6 +155,7 @@ function classifyNpc(data) {
 
 export class Npc {
   constructor(data) {
+    this.id = data.id;
     this.data = { ...data };
     this.pending = !!data.pending;
     this.root = new THREE.Group();
@@ -153,6 +167,10 @@ export class Npc {
     this.placeholder = null;
     this.nameSprite = null;
     this.selection = null;
+    this._components = Array.isArray(data.components) ? data.components : [];
+    this._parts = new Map();
+    this._selectedPartId = null;
+    this._partHelper = null;
     this._t = Math.random() * Math.PI * 2; // animation phase per NPC
     this._life = {
       kind: classifyNpc(this.data),
@@ -173,6 +191,7 @@ export class Npc {
 
   tick(dt) {
     this._t += dt;
+    this._partHelper?.update?.();
     // Animate the loading blob if one is present.
     if (this.placeholder && this.placeholder.userData?.isLoadingBlob) {
       const blob = this.placeholder.userData.blobRef;
@@ -244,6 +263,7 @@ export class Npc {
         this.modelRoot = model;
         this._setupClipAnimation(gltf);
         this.root.add(model);
+        this._buildPartRegistry(model);
         if (this.placeholder) {
           this.root.remove(this.placeholder);
           this.placeholder = null;
@@ -255,6 +275,34 @@ export class Npc {
         toast(`Model file loaded in Blender, but the app could not display it. Check DevTools for ${url}.`, 'error', 7000);
       }
     );
+  }
+
+  _buildPartRegistry(gltfScene) {
+    this.clearPartSelection();
+    this._parts = new Map();
+
+    const byMeshIndex = new Map(
+      this._components.map((component) => [component.meshIndex, component])
+    );
+
+    let fallbackIndex = 0;
+    gltfScene.traverse((object) => {
+      if (!object.isMesh) return;
+
+      const component = byMeshIndex.get(object.userData.meshIndex ?? fallbackIndex)
+        ?? this._components.find((entry) => slugifyPartId(entry.name) === slugifyPartId(object.name));
+
+      const partId = uniquePartId(
+        this._parts,
+        component?.partId ?? slugifyPartId(object.name, `part_${fallbackIndex + 1}`),
+        fallbackIndex
+      );
+
+      object.userData.partId = partId;
+      object.userData.npcId = this.id;
+      this._parts.set(partId, object);
+      fallbackIndex++;
+    });
   }
 
   _setupClipAnimation(gltf) {
@@ -297,6 +345,10 @@ export class Npc {
       this._applyTransform();
     }
     if ('name' in patch) this._refreshNameSprite();
+  }
+
+  setComponents(components) {
+    this._components = Array.isArray(components) ? components : [];
   }
 
   promote(data) {
@@ -420,7 +472,40 @@ export class Npc {
     }
   }
 
+  setSelectedPart(partId) {
+    this.clearPartSelection();
+    const mesh = this._parts.get(partId);
+    if (!mesh) return;
+
+    this._selectedPartId = partId;
+    const box = new THREE.BoxHelper(mesh, 0xf5a623);
+    box.userData.isPartHelper = true;
+    box.raycast = () => {};
+    (this.root.parent ?? this.root).add(box);
+    this._partHelper = box;
+  }
+
+  clearPartSelection() {
+    if (this._partHelper) {
+      this._partHelper.parent?.remove(this._partHelper);
+      this._partHelper.geometry?.dispose?.();
+      this._partHelper.material?.dispose?.();
+      this._partHelper = null;
+    }
+    this._selectedPartId = null;
+  }
+
+  getPartIds() {
+    return Array.from(this._parts.keys());
+  }
+
+  getPartName(partId) {
+    const component = this._components.find((entry) => entry.partId === partId);
+    return component?.name ?? partId;
+  }
+
   dispose() {
+    this.clearPartSelection();
     this._clearClipAnimation();
     this.root.traverse((o) => {
       if (o.geometry) o.geometry.dispose();

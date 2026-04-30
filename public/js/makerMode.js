@@ -192,12 +192,23 @@ export class MakerMode {
     this.raycaster.setFromCamera(center, this.camera);
     const hits = this.raycaster.intersectObject(this.world.group, true);
     if (hits.length) {
-      const npc = this.world.npcFromObject(hits[0].object);
+      const hit = this.world.npcFromObject(hits[0].object);
+      const npc = hit?.npc;
       if (npc && !npc.pending) {
+        if (hit.partId) {
+          npc.setSelectedPart(hit.partId);
+          document.dispatchEvent(new CustomEvent('select-part', {
+            detail: { npcId: npc.id, partId: hit.partId },
+          }));
+        } else {
+          npc.clearPartSelection();
+        }
         this._select(npc);
         // Releasing the mouse is helpful so the user can edit.
         this.controls.unlock();
       }
+    } else if (this.selected) {
+      this.selected.clearPartSelection();
     }
   }
 
@@ -252,7 +263,10 @@ export class MakerMode {
 
   _select(npc) {
     if (this.selected === npc) return;
-    if (this.selected) this.selected.setSelected(false);
+    if (this.selected) {
+      this.selected.clearPartSelection();
+      this.selected.setSelected(false);
+    }
     this.selected = npc;
     if (npc) {
       npc.setSelected(true);

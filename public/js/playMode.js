@@ -100,7 +100,8 @@ export class PlayMode {
     const hits = this.raycaster.intersectObject(this.world.group, true);
     let target = null;
     if (hits.length) {
-      const npc = this.world.npcFromObject(hits[0].object);
+      const hit = this.world.npcFromObject(hits[0].object);
+      const npc = hit?.npc;
       if (npc && !npc.pending && hits[0].distance <= TALK_DISTANCE) target = npc;
     }
     if (target !== this.targetNpc) {
