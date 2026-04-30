@@ -102,7 +102,6 @@ export class MakerMode {
   }
 
   update(dt) {
-    if (!this.controls.isLocked) return;
     let speed = FLY_SPEED * dt;
     if (this.keys.has('shiftleft') || this.keys.has('shiftright')) {
       // Shift = down (handled below). Ctrl could be fast in future.
@@ -143,9 +142,7 @@ export class MakerMode {
   }
 
   _onMouseMove(e) {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this._setPointerFromEvent(e);
 
     if (this.dragMode && this.selected && (e.buttons & 1)) {
       const point = this._raycastGround();
@@ -169,6 +166,7 @@ export class MakerMode {
   _onCanvasClick(e) {
     // If user clicked on UI, ignore.
     if (e.target !== this.renderer.domElement) return;
+    this._setPointerFromEvent(e);
 
     if (this.dragMode && this.selected) {
       // End the drag — commit final position once more.
@@ -182,22 +180,17 @@ export class MakerMode {
       return;
     }
 
-    if (!this.controls.isLocked) {
-      this.controls.lock();
+    const pick = this._pickNpcAtPointer(this.controls.isLocked ? new THREE.Vector2(0, 0) : this.pointer);
+    if (pick && !pick.pending) {
+      this._select(pick);
+      // Releasing the mouse is helpful so the user can edit component settings.
+      if (this.controls.isLocked) this.controls.unlock();
       return;
     }
 
-    // While locked, the pointer is at the centre. Use (0,0) for raycast.
-    const center = new THREE.Vector2(0, 0);
-    this.raycaster.setFromCamera(center, this.camera);
-    const hits = this.raycaster.intersectObject(this.world.group, true);
-    if (hits.length) {
-      const npc = this.world.npcFromObject(hits[0].object);
-      if (npc && !npc.pending) {
-        this._select(npc);
-        // Releasing the mouse is helpful so the user can edit.
-        this.controls.unlock();
-      }
+    if (!this.controls.isLocked) {
+      this.controls.lock();
+      return;
     }
   }
 
@@ -244,6 +237,7 @@ export class MakerMode {
       return;
     }
     input.value = '';
+    input.blur();
     status.textContent = 'Queued. This may take a few minutes.';
     setTimeout(() => (status.textContent = ''), 5000);
   }
@@ -457,6 +451,22 @@ export class MakerMode {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObject(this.walkable, true);
     return hits[0]?.point || null;
+  }
+
+  _setPointerFromEvent(e) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  _pickNpcAtPointer(pointer) {
+    this.raycaster.setFromCamera(pointer, this.camera);
+    const hits = this.raycaster.intersectObject(this.world.group, true);
+    for (const hit of hits) {
+      const result = this.world.npcFromObject(hit.object);
+      if (result?.npc) return result.npc;
+    }
+    return null;
   }
 
   _sampleGroundY(x, z) {

@@ -120,6 +120,13 @@ function validateVehicleAssembly(report, prompt) {
       if (extension > allowedExtension) {
         issues.push(`Vehicle body "${body.nodeName || body.nodeIndex}" extends too far beyond the wheel envelope (${extension.toFixed(2)}, allowed ${allowedExtension.toFixed(2)}); recenter/assemble body, cabin, and wheels before export.`);
       }
+      const wheelCentersY = wheels.map((entry) => entry.worldBounds.center[1]);
+      const averageWheelCenterY = average(wheelCentersY);
+      const averageWheelDiameterY = average(wheels.map((entry) => entry.worldBounds.size[1]));
+      const minimumBodyBottom = averageWheelCenterY - averageWheelDiameterY * 0.25;
+      if (body.worldBounds.min[1] < minimumBodyBottom) {
+        issues.push(`Vehicle body "${body.nodeName || body.nodeIndex}" drops through the wheels (body bottom ${body.worldBounds.min[1].toFixed(2)}, expected above ${minimumBodyBottom.toFixed(2)}); lift/reshape the body so wheels remain visibly attached outside the lower body.`);
+      }
     }
 
     const wheelLayoutIssue = validateWheelLayout(wheels, wheelBounds, combined, kind);
@@ -136,6 +143,9 @@ function validateVehicleAssembly(report, prompt) {
     for (const cabin of cabins) {
       if (!boundsNearOnAxes(cabin.worldBounds, bodyBounds, [0, 2], 0.25)) {
         issues.push(`Vehicle cabin "${cabin.nodeName || cabin.nodeIndex}" is separated from the body envelope; attach it to the body before export.`);
+      }
+      if (boundsMostlyInside(cabin.worldBounds, bodyBounds, 0.05)) {
+        issues.push(`Vehicle cabin/window "${cabin.nodeName || cabin.nodeIndex}" is buried inside the body bounds; it should be visible on top of or outside the body shell.`);
       }
     }
   }
@@ -217,6 +227,21 @@ function boundsNearOnAxes(bounds, reference, axes, toleranceRatio) {
     return bounds.max[axis] >= reference.min[axis] - tolerance
       && bounds.min[axis] <= reference.max[axis] + tolerance;
   });
+}
+
+function boundsMostlyInside(bounds, reference, marginRatio) {
+  if (!bounds || !reference) return false;
+  return [0, 1, 2].every((axis) => {
+    const margin = Math.max(reference.size[axis] * marginRatio, 0.03);
+    return bounds.min[axis] >= reference.min[axis] + margin
+      && bounds.max[axis] <= reference.max[axis] - margin;
+  });
+}
+
+function average(values) {
+  const finite = values.filter(Number.isFinite);
+  if (!finite.length) return 0;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
 }
 
 function boundsVolume(bounds) {

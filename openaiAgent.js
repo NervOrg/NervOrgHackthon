@@ -32,20 +32,22 @@ SERVER REQUIREMENTS (the system enforces these — do not deviate):
 - If the import creates multiple objects, parent/group the complete imported hierarchy and select every visible mesh/armature/empty that belongs to the requested model before export. Do not export a single child mesh unless it is the entire model.
 - Before creating Blender geometry, make an explicit real-world reference plan: describe the requested asset's normal visible components and plausible component colors/materials, then build from that plan.
 - Infer the real-world components of the requested asset before modeling, then create those components as separate named Blender objects/mesh nodes. Keep names user-facing and specific, such as Head, Torso, Left_Arm, Right_Wheel, Hull, Sail, Window, or Door.
+- Assemble components into a recognizable object, not a pile of named primitives. For vehicles, the body/chassis must sit above the wheel centers, wheels must be visibly outside/attached near the lower side edges, windows/cabin must be visible on top of or outside the body shell, and no important component may be buried inside another opaque component.
 - Do not join, merge, or collapse the component meshes into one final mesh. The final GLB must contain multiple named mesh nodes so the browser can raycast-select and edit each part independently.
 - If an imported/downloaded model arrives as a single mesh, split it into meaningful loose parts when possible or rebuild a simplified multi-part version. Do not export a one-mesh opaque asset.
 - Assign every component mesh at least one named Blender material with a visible base color before export. Use plausible real-world colors/materials for the requested asset; do not leave any mesh with an unassigned/default material slot, and do not use one generic grey/white material for all parts.
 - Use Blender's GLTF export with format='GLB' and use_selection=True so only the requested model ships out.
 - Export materials in the GLB: set export_materials='EXPORT' when calling bpy.ops.export_scene.gltf.
 - Before export, clear selection and select only the visible meshes/armatures/empties that belong to this job's requested model.
-- When the requested asset can plausibly move, create at least one short looping animation action (idle, hover, spin, walk-in-place, engine rock, or similar) using Blender keyframes, bones, or object transforms.
-- For multi-part models, parent all visible components under one root before keyframing. Animate the root for whole-model motion, or animate multiple actual moving components. Do not animate only one isolated mesh unless it is the parent of all other visible parts.
-- Export animation data in the GLB: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
+- When the requested asset can plausibly move, create at least one simple short looping animation action only if it is straightforward. Animation is optional; never let animation setup block GLB export.
+- For multi-part models, parent all visible components under one root before keyframing. If animation is added, animate the root for whole-model motion, or animate multiple actual moving components. Do not spend time debugging animation API errors; export the assembled model without animation instead.
+- Export animation data in the GLB when animation exists: set export_animations=True, export_skins=True, and export_bake_animation=True when calling bpy.ops.export_scene.gltf.
 - Keep the exported model under 50,000 polygons.
 - Name every distinct part of the model as a separate mesh object using the pattern
   ModelType_PartName (e.g. Witch_Hat, Witch_Robe, Car_Wheel_FL). Do not merge
   separate logical parts into one mesh. Each part the user might customise must be
   its own named object.
+- The assembled model GLB is the deliverable. If optional animation, texture, or polish steps fail, skip them and export the assembled model anyway.
 - After the GLB file exists at the path above, you are done. End your turn with a brief summary message and no further tool calls.
 - If you cannot fulfil the request, end your turn with a short message starting with "ERROR:" describing why — do not silently give up.
 ────────────────────────────────────────────
@@ -162,6 +164,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
   if (!glbExistsAndValid(glbPath)) {
     throw new Error(`Agent finished but ${path.basename(glbPath)} is missing or too small`);
   }
+  normalizeNamedMaterialColors(glbPath, onProgress);
   let validation = await validateGeneratedOutput(glbPath, { prompt });
   for (let attempt = 0; !validation.ok && attempt < repairAttempts; attempt++) {
     onProgress(formatValidationForProgress(validation));
@@ -189,6 +192,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
     if (!glbExistsAndValid(glbPath)) {
       throw new Error(`Repair attempt ${attempt + 1} finished but ${path.basename(glbPath)} is missing or too small`);
     }
+    normalizeNamedMaterialColors(glbPath, onProgress);
     validation = await validateGeneratedOutput(glbPath, { prompt });
   }
   onProgress(formatValidationForProgress(validation));
@@ -247,8 +251,34 @@ async function runAgentLoop({ client, model, messages, openaiTools, glbPath, max
 
     if (toolCalls.length === 0) {
       const content = (msg.content || '').toString().trim();
-      if (content.startsWith('ERROR:')) throw new Error(content.slice(6).trim() || 'agent reported error');
+      if (content.startsWith('ERROR:') && glbExistsAndValid(glbPath)) {
+        onProgress('Agent reported a non-blocking issue after GLB export; continuing with validation.');
+        break;
+      }
+      if (content.startsWith('ERROR:')) {
+        onProgress(content.slice(6, 220).trim() || 'agent reported an issue before export');
+        messages.push({
+          role: 'user',
+          content: [
+            'The GLB file does not exist yet. Do not ask follow-up questions.',
+            'If optional animation/material polish is blocking you, skip that optional step.',
+            `Export the assembled model now to EXACTLY this path: ${toBlenderPath(glbPath)}`,
+          ].join('\n'),
+        });
+        continue;
+      }
       onProgress(content ? content.slice(0, 200) : '(agent finished)');
+      if (!glbExistsAndValid(glbPath)) {
+        messages.push({
+          role: 'user',
+          content: [
+            'The GLB file does not exist yet. Do not ask follow-up questions.',
+            'Export the assembled model now. Optional animation or polish may be skipped.',
+            `Export path: ${toBlenderPath(glbPath)}`,
+          ].join('\n'),
+        });
+        continue;
+      }
       break;
     }
 
@@ -640,6 +670,42 @@ function materialBaseColor(material) {
   return Array.isArray(factor) ? factor.slice(0, 3).map(Number) : [1, 1, 1];
 }
 
+function normalizeNamedMaterialColors(glbPath, onProgress = () => {}) {
+  try {
+    const { json, binChunk } = readGlb(glbPath);
+    let changed = 0;
+    for (const material of json.materials || []) {
+      const color = colorFromMaterialName(material.name);
+      if (!color) continue;
+      material.pbrMetallicRoughness ??= {};
+      const existing = materialBaseColor(material);
+      if (colorKey(existing) === colorKey(color)) continue;
+      material.pbrMetallicRoughness.baseColorFactor = [...color, 1];
+      changed++;
+    }
+    if (changed > 0) {
+      writeGlb(glbPath, json, binChunk);
+      onProgress(`Normalized ${changed} named material color(s) in GLB`);
+    }
+  } catch (err) {
+    onProgress(`Material color normalization skipped: ${err.message}`);
+  }
+}
+
+function colorFromMaterialName(name = '') {
+  const text = ` ${String(name).toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `;
+  if (/\b(red|crimson|scarlet)\b/.test(text)) return [0.9, 0.05, 0.03];
+  if (/\b(black|tire|tyre|rubber)\b/.test(text)) return [0.02, 0.02, 0.025];
+  if (/\b(blue|glass|window|cyan)\b/.test(text)) return [0.08, 0.38, 0.95];
+  if (/\b(green)\b/.test(text)) return [0.08, 0.65, 0.18];
+  if (/\b(yellow|gold)\b/.test(text)) return [0.95, 0.72, 0.08];
+  if (/\b(orange)\b/.test(text)) return [0.95, 0.36, 0.05];
+  if (/\b(white)\b/.test(text)) return [0.95, 0.95, 0.9];
+  if (/\b(gray|grey|silver|metal)\b/.test(text)) return [0.45, 0.48, 0.5];
+  if (/\b(brown|wood)\b/.test(text)) return [0.45, 0.24, 0.08];
+  return null;
+}
+
 function colorKey(color) {
   return color.map((channel) => Math.round(Math.max(0, Math.min(1, channel)) * 10)).join(',');
 }
@@ -655,12 +721,54 @@ function isNeutralDefaultColor(color) {
 }
 
 function readGlbJson(p) {
+  return readGlb(p).json;
+}
+
+function readGlb(p) {
   const data = fs.readFileSync(p);
   if (data.toString('ascii', 0, 4) !== 'glTF') throw new Error('not a GLB file');
+  const declaredLength = data.readUInt32LE(8);
+  if (declaredLength !== data.length) throw new Error('GLB length header mismatch');
   const jsonLength = data.readUInt32LE(12);
   const jsonType = data.toString('ascii', 16, 20);
   if (jsonType !== 'JSON') throw new Error('GLB JSON chunk missing');
-  return JSON.parse(data.subarray(20, 20 + jsonLength).toString('utf8'));
+  const jsonEnd = 20 + jsonLength;
+  const json = JSON.parse(data.subarray(20, jsonEnd).toString('utf8').trim());
+  let binChunk = null;
+  if (jsonEnd + 8 <= data.length) {
+    const binLength = data.readUInt32LE(jsonEnd);
+    const binType = data.toString('ascii', jsonEnd + 4, jsonEnd + 8);
+    if (binType !== 'BIN\0') throw new Error('GLB BIN chunk has unexpected type');
+    binChunk = data.subarray(jsonEnd + 8, jsonEnd + 8 + binLength);
+  }
+  return { json, binChunk };
+}
+
+function writeGlb(p, json, binChunk) {
+  const jsonBuffer = paddedBuffer(Buffer.from(JSON.stringify(json), 'utf8'), 0x20);
+  const chunks = [
+    chunkBuffer(jsonBuffer, 'JSON'),
+  ];
+  if (binChunk) chunks.push(chunkBuffer(paddedBuffer(Buffer.from(binChunk), 0x00), 'BIN\0'));
+  const totalLength = 12 + chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const header = Buffer.alloc(12);
+  header.write('glTF', 0, 'ascii');
+  header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(totalLength, 8);
+  fs.writeFileSync(p, Buffer.concat([header, ...chunks], totalLength));
+}
+
+function chunkBuffer(data, type) {
+  const header = Buffer.alloc(8);
+  header.writeUInt32LE(data.length, 0);
+  header.write(type, 4, 'ascii');
+  return Buffer.concat([header, data], header.length + data.length);
+}
+
+function paddedBuffer(buffer, byte) {
+  const pad = (4 - (buffer.length % 4)) % 4;
+  if (!pad) return buffer;
+  return Buffer.concat([buffer, Buffer.alloc(pad, byte)], buffer.length + pad);
 }
 
 function formatMcpResult(result) {
