@@ -1,0 +1,9 @@
+node_modules
+assets/
+world.json
+world.json.tmp
+jobs/
+.env
+.env.local
+.env.*.local
+*.log
