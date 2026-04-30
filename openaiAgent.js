@@ -134,7 +134,7 @@ export async function generateWithOpenAI({ id, prompt, onProgress = () => {} }) 
       client,
       model,
       messages,
-      openAITools,
+      openaiTools,
       glbPath,
       maxSteps: repairMaxSteps,
       onProgress,
