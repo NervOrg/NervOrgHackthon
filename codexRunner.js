@@ -18,6 +18,7 @@ import path from 'node:path';
 import { buildComponentManifest, generateWithOpenAI } from './openaiAgent.js';
 import { formatValidationForProgress, validateGeneratedGlb } from './generationQualityGate.js';
 import { inspectGlb } from './glbInspector.js';
+import { generateFromTemplate, hasTemplate } from './templateGenerator.js';
 
 const ASSETS_DIR = path.resolve('assets');
 const JOBS_DIR = path.resolve('jobs');
@@ -38,6 +39,10 @@ export async function generateNpc(opts) {
   await fsp.mkdir(JOBS_DIR, { recursive: true });
 
   if (process.env.FAKE_GENERATOR === '1') return normalizeGenerationResult(await fakeGenerate(opts));
+
+  if (hasTemplate(opts.prompt)) {
+    return normalizeGenerationResult(await generateFromTemplate(opts));
+  }
 
   const backend = (process.env.GENERATOR || 'openai').toLowerCase();
   if (backend === 'openai') return normalizeGenerationResult(await withTimeout(generateWithOpenAI(opts), TIMEOUT_MS));
